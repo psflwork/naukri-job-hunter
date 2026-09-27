@@ -9,17 +9,31 @@ No coding needed.
 - Apply to the jobs you tick, or get recruiter emails and phone numbers to send your resume yourself
 - Your resume, login and results never leave your computer
 
-## Get started
+## Set up (one time)
 
 1. **Install** [Google Chrome](https://www.google.com/chrome/) and
-   [Python](https://www.python.org/downloads/) (free). On Windows, tick **"Add python.exe to PATH"**
-   in the Python installer.
-2. **Download** this tool: green **Code** button → **Download ZIP**, then unzip it.
-3. **Double-click** `START-HERE-Windows.bat` (Windows) or `START-HERE-Mac.command` (Mac).
-   The first start takes a few minutes. Then the app opens in your browser. Keep the small black
-   window open while you use it.
-4. In **What I'm looking for**, upload your resume, check the job titles and location, and click
-   **Save**.
+   [Python 3.10+](https://www.python.org/downloads/) (both free). On Windows, tick
+   **"Add python.exe to PATH"** in the Python installer.
+2. **Download** this tool: green **Code** button → **Download ZIP**, then unzip it (for example into
+   Documents). With git: `git clone https://github.com/psflwork/naukri-job-hunter.git`
+3. **Start it** (see [Run](#run) below). The first start takes 2-5 minutes while it installs what it
+   needs.
+4. In the browser, open **What I'm looking for**:
+   - upload your resume (PDF); skills are picked up from it,
+   - check job titles, location, work mode, job type and experience, then click **Save**.
+5. Optional: under **Naukri login**, save your email and password, then click **Open Chrome and sign
+   in**. Complete any OTP or captcha in that Chrome window.
+
+## Run
+
+| | How to start |
+|---|---|
+| **Mac** | Double-click `START-HERE-Mac.command`, or in Terminal: `cd naukri-job-hunter && ./run.sh web` |
+| **Windows** | Double-click `START-HERE-Windows.bat` |
+| **Linux** | `cd naukri-job-hunter && ./run.sh web` |
+
+The app opens in your browser at `http://127.0.0.1:8765`. Keep the small terminal window open while
+you use it. To stop, click **Stop app** or close that window.
 
 <details>
 <summary>Windows or Mac blocks the file?</summary>
@@ -40,8 +54,7 @@ No coding needed.
 | **What I'm looking for** | Resume, job titles, skills, location, work mode, job type, experience |
 | **Naukri login** | Save your login (optional) or sign in now |
 
-Switch between **Regular jobs** and **Side gigs** at the top. Next time, just double-click the
-START-HERE file again.
+Switch between **Regular jobs** and **Side gigs** at the top.
 
 <details>
 <summary>Common questions</summary>
@@ -50,15 +63,19 @@ START-HERE file again.
 - **Will it apply without asking?** No. It applies only to jobs you tick.
 - **OTP or captcha?** Complete it in the Chrome window; you stay signed in afterwards.
 - **No jobs found?** Add more job titles, clear the location, or untick work modes.
-- **Page says it can't connect?** The app was stopped; double-click START-HERE again.
+- **Page says it can't connect?** The app was stopped; start it again.
+- **"Python 3.10 or newer is needed"?** Install Python (step 1), then start again.
+- **`Permission denied` on Mac?** Run `chmod +x run.sh START-HERE-Mac.command` in the folder.
 
 </details>
 
 ## For developers
 
 ```bash
-git clone https://github.com/psflwork/naukri-job-hunter.git && cd naukri-job-hunter
-./run.sh web     # browser app  |  ./run.sh menu  terminal menu  |  ./run.sh --help  all commands
+./run.sh web     # browser app
+./run.sh menu    # numbered menu in the terminal
+./run.sh         # search + report + apply menu in the terminal (./run.sh side for gigs)
+./run.sh --help  # all commands
 ```
 
 It also works as an **AI agent** (MCP server for Cursor, Claude Desktop and others). See the
