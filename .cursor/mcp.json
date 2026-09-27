@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "naukri-job-hunter": {
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["${workspaceFolder}/mcp_server.py"]
+    }
+  }
+}

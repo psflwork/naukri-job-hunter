@@ -1,0 +1,13 @@
+# Secrets and personal data - never commit
+.env
+*.pdf
+/config.yaml
+/config.*.yaml
+data/
+output/
+
+# Environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store

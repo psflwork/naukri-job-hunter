@@ -1,0 +1,204 @@
+# Side-gig hunt: remote part-time / freelance / contract / second-job roles.
+# Run with:  ./run.sh side      (or --profile side on any command)
+
+profile_name: Side gigs (part-time / freelance / contract, remote)
+
+# `./run.sh setup` fills these in for you.
+resume_path: ""
+experience_years: 8
+
+# Naukri has no part-time filter and matches keywords loosely, so plain gig words
+# ("freelance", "part time") find the most real gigs; the tech-specific ones add depth.
+queries:
+  - freelance
+  - freelancing
+  - part time
+  - part time developer
+  - contract developer
+  - contractual
+  - freelance full stack developer
+  - freelance python developer
+  - freelance react developer
+  - part time architect
+  - contract solution architect
+  - freelance ai engineer
+
+search:
+  remote_only: true
+  experience_filter: null  # no Naukri experience filter; junior gigs are dropped below instead
+  job_age_days: 30         # gigs are posted less often; look back further
+  max_pages_per_query: 4
+  min_delay_seconds: 3
+  max_delay_seconds: 7
+  headless: false
+
+# A job is kept only if it shows a gig signal:
+#   gig_keywords       - searched in title, tags and description
+#   gig_title_keywords - searched in the title only (too noisy in descriptions)
+#   gig_ignore_phrases - removed before searching (e.g. "contract testing")
+require_gig_keywords: true
+gig_keywords:
+  - part time
+  - part-time
+  - freelance
+  - freelancer
+  - freelancing
+  - contractual
+  - contract role
+  - contract position
+  - contract basis
+  - contract opportunity
+  - contract job
+  - contract engagement
+  - contract duration
+  - contract rate
+  - type contract
+  - month contract
+  - months contract
+  - month engagement
+  - months engagement
+  - contract to hire
+  - c2h
+  - hourly
+  - per hour
+  - weekends only
+  - flexible hours
+  - flexible timings
+  - few hours
+  - secondary income
+  - side income
+  - independent consultant
+  - moonlighting
+  - second job
+  - 2nd job
+  - project based
+  - project-based
+gig_title_keywords:
+  - contract
+  - weekend
+  - consultant
+gig_ignore_phrases:
+  - contract testing
+  - smart contract
+  - smart contracts
+  - if on contract
+  - contract management
+  - weekend work
+  - weekend support
+  - no freelancers
+  - not freelance
+  - no part time
+
+# Title in strong_titles = full title points; in target_titles = partial.
+strong_titles:
+  - full stack
+  - fullstack
+  - full-stack
+  - architect
+  - python
+  - react
+  - node
+  - fastapi
+  - ai
+  - genai
+  - llm
+target_titles:
+  - developer
+  - engineer
+  - programmer
+  - lead
+  - consultant
+  - expert
+
+exclude_title_keywords:
+  - sales
+  - teacher
+  - tutor
+  - trainer
+  - faculty
+  - accountant
+  - recruiter
+  - recruitment
+  - hr
+  - video editor
+  - customer
+  - telecaller
+  - chat process
+  - bpo
+  - data entry
+  - content writer
+  - marketing
+  - seo
+  - sap
+  - salesforce
+  - sfdc
+  - servicenow
+  - mainframe
+  - qa
+  - testing
+  - wordpress
+  - shopify
+  - php
+  - erp
+  - intern
+  - fresher
+
+exclude_companies: []
+
+skills:
+  - python
+  - fastapi
+  - node.js
+  - nodejs
+  - react
+  - reactjs
+  - react.js
+  - typescript
+  - javascript
+  - angular
+  - aws
+  - azure
+  - kubernetes
+  - docker
+  - postgresql
+  - mongodb
+  - elasticsearch
+  - graphql
+  - snowflake
+  - databricks
+  - microservices
+  - micro frontend
+  - rest api
+  - full stack
+  - generative ai
+  - genai
+  - llm
+  - openai
+  - langchain
+  - rag
+  - ai agents
+  - prompt engineering
+  - mcp
+  - system design
+  - solution architecture
+
+# A job needs at least this many of your skills to be scored at all.
+min_skill_matches: 1
+
+# Drop gigs whose experience range tops out below this (junior work).
+skip_if_max_experience_below: 5
+
+# Salary is ignored; gig type and skills matter most.
+weights:
+  skills: 45
+  gig: 20
+  title: 15
+  experience: 10
+  remote: 10
+
+min_score: 45
+
+apply:
+  max_per_run: 10
+  max_per_day: 15
+  skip_questionnaires: true
