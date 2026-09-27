@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-command entry point: sets up everything on first run, then hunts jobs.
 # Not a developer? Double-click START-HERE-Mac.command (or START-HERE-Windows.bat) instead.
-#   ./run.sh menu         simple numbered menu for everything below
+#   ./run.sh web          open the app in your web browser (everything below, with buttons)
+#   ./run.sh menu         simple numbered menu in the terminal
 #   ./run.sh              login + search + report + ask before applying
 #   ./run.sh side         same, using the side-gig profile (config.side.yaml)
 #   ./run.sh --apply      same, apply without asking (for cron/scheduled runs)
@@ -62,11 +63,12 @@ if ! has_chrome && [ ! -f .venv/.chromium-installed ]; then
   touch .venv/.chromium-installed
 fi
 
-if [ ! -f config.yaml ] && [ "${1:-}" != "setup" ]; then
+# The web app has its own first-run steps in the browser.
+if [ ! -f config.yaml ] && [ "${1:-}" != "setup" ] && [ "${1:-}" != "web" ]; then
   .venv/bin/python hunt.py setup
 fi
 
-COMMANDS="run login search open apply pick contacts prefs resume menu"
+COMMANDS="run login search open apply pick contacts prefs resume menu web"
 is_command() { [[ " $COMMANDS " == *" ${1:-} "* ]]; }
 
 case "${1:-}" in

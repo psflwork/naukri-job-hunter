@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Naukri remote job hunter.
 
-  ./run.sh menu                      # simple numbered menu (what the START-HERE launchers open)
+  ./run.sh web                       # the app in your web browser (what the START-HERE launchers open)
+  ./run.sh menu                      # simple numbered menu in the terminal
   ./run.sh setup                     # first-run wizard (run.sh starts it automatically)
   ./run.sh                           # everything: login, search, report, offer to apply
   ./run.sh side                      # same, using the side-gig profile (config.side.yaml)
@@ -282,7 +283,8 @@ def print_candidates(jobs: list[Job]) -> None:
         print(f"  {j.score:3d}  {j.title} @ {j.company}\n       {j.url}")
 
 
-def apply_jobs(jobs: list[Job]) -> None:
+def apply_jobs(jobs: list[Job]) -> list[tuple[Job, str]]:
+    results = []
     with Naukri(headless=False) as n:
         if not (n.ensure_logged_in() or n.login()):
             raise SystemExit("Not logged in. Set NAUKRI_EMAIL/NAUKRI_PASSWORD in .env or run: ./run.sh login")
@@ -291,7 +293,9 @@ def apply_jobs(jobs: list[Job]) -> None:
             print(f"  {status:16s} {j.title} @ {j.company}")
             if status in ("applied", "already_applied"):
                 record_applied(j, status)
+            results.append((j, status))
             n.page.wait_for_timeout(3000)
+    return results
 
 
 def cmd_apply(cfg: dict, args) -> None:
@@ -464,7 +468,10 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("path", nargs="?", help="resume PDF (asks if omitted)")
     rs.add_argument("--keep-skills", action="store_true", help="don't replace skills with detected ones")
     sub.add_parser("setup", help="first-run wizard: resume, experience, roles, Naukri login")
-    sub.add_parser("menu", help="simple numbered menu for every action (used by the START-HERE launchers)")
+    sub.add_parser("menu", help="simple numbered menu for every action, in the terminal")
+    wp = sub.add_parser("web", help="open the app in your web browser (used by the START-HERE launchers)")
+    wp.add_argument("--port", type=int, default=8765)
+    wp.add_argument("--no-open", action="store_true", help="don't open the browser automatically")
     return p
 
 
@@ -473,6 +480,9 @@ def main() -> None:
     args = parser.parse_args(sys.argv[1:] or ["run"])
     if args.cmd == "menu":
         cmd_menu(parser)
+    elif args.cmd == "web":
+        from webapp import serve
+        serve(args.port, open_browser=not args.no_open)
     else:
         dispatch(args)
 
@@ -545,6 +555,7 @@ MENU = """
   6) Use a new resume
   7) Log in to Naukri again
   8) Start setup again
+  w) Open in my web browser instead
   q) Quit
 """
 
@@ -590,6 +601,13 @@ def cmd_menu(parser: argparse.ArgumentParser) -> None:
             argv = ["login"]
         elif choice == "8":
             argv = ["setup"]
+        elif choice == "w":
+            from webapp import serve
+            try:
+                serve()
+            except KeyboardInterrupt:
+                pass
+            continue
         if argv is None:
             print("Please type one of the numbers shown, or q to quit.")
             continue

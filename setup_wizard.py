@@ -88,6 +88,12 @@ def _write_env() -> None:
     if not email:
         return
     password = getpass.getpass("Naukri password (nothing shows while you type; press Enter when done): ")
+    save_credentials(email, password)
+    print("Saved to .env")
+
+
+def save_credentials(email: str, password: str) -> None:
+    """Write the Naukri login to .env (owner-only permissions) and use it in this process right away."""
     old_umask = os.umask(0o077)
     try:
         ENV_FILE.write_text(
@@ -97,7 +103,7 @@ def _write_env() -> None:
     finally:
         os.umask(old_umask)
     ENV_FILE.chmod(0o600)
-    print("Saved to .env")
+    os.environ["NAUKRI_EMAIL"], os.environ["NAUKRI_PASSWORD"] = email, password
 
 
 def run_setup() -> None:

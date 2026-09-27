@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naukri Job Hunter</title>
+<style>
+:root { --blue:#275df5; --blue-soft:#eaf0ff; --green:#0a7d35; --green-soft:#e6f6ec; --red:#c62828;
+        --amber-soft:#fff5d6; --text:#1d2433; --muted:#6b7385; --line:#e4e7ee; --bg:#f5f7fb; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system, "Segoe UI", Roboto, sans-serif; color:var(--text); background:var(--bg); }
+header { background:#fff; border-bottom:1px solid var(--line); padding:14px 24px; display:flex; gap:16px;
+         align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:5; }
+header h1 { font-size:20px; margin:0; margin-right:auto; }
+header h1 span { color:var(--blue); }
+.switch { display:flex; background:var(--bg); border-radius:10px; padding:4px; }
+.switch button { border:0; background:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:14px; color:var(--muted); }
+.switch button.on { background:#fff; color:var(--blue); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+nav { display:flex; gap:4px; padding:0 24px; background:#fff; border-bottom:1px solid var(--line); overflow-x:auto; }
+nav button { border:0; background:none; padding:14px 16px; cursor:pointer; font-size:15px; color:var(--muted);
+             border-bottom:3px solid transparent; white-space:nowrap; }
+nav button.on { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; }
+main { max-width:1100px; margin:24px auto; padding:0 24px 160px; }
+.card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px; margin-bottom:18px; }
+.card h2 { margin:0 0 6px; font-size:19px; }
+.card h3 { margin:18px 0 6px; font-size:15px; }
+.muted { color:var(--muted); font-size:14px; }
+.btn { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--blue); background:var(--blue); color:#fff;
+       padding:10px 18px; border-radius:10px; font-size:15px; cursor:pointer; text-decoration:none; }
+.btn.big { padding:14px 26px; font-size:17px; font-weight:600; }
+.btn.ghost { background:#fff; color:var(--blue); }
+.btn.small { padding:5px 10px; font-size:13px; border-radius:8px; }
+.btn.danger { background:#fff; color:var(--red); border-color:#f1c4c4; }
+.btn:disabled { opacity:.45; cursor:not-allowed; }
+.row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:14px; margin:14px 0; }
+.fact { background:var(--bg); border-radius:10px; padding:12px 14px; }
+.fact b { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:4px; }
+.banner { background:var(--amber-soft); border:1px solid #f0dca0; border-radius:12px; padding:14px 18px; margin-bottom:18px; }
+.ok { color:var(--green); font-weight:600; }
+.err { color:var(--red); }
+label.field { display:block; margin:16px 0 6px; font-weight:600; font-size:14px; }
+label.field small { font-weight:400; color:var(--muted); }
+input[type=text], input[type=email], input[type=password], input[type=number], textarea {
+  width:100%; padding:10px 12px; border:1px solid #cfd5e2; border-radius:9px; font:inherit; font-size:15px; }
+textarea { min-height:84px; resize:vertical; }
+.checks { display:flex; gap:10px; flex-wrap:wrap; }
+.checks label { display:flex; gap:6px; align-items:center; border:1px solid var(--line); padding:8px 12px;
+                border-radius:9px; cursor:pointer; font-size:14px; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+td a { color:var(--blue); text-decoration:none; font-weight:600; }
+.score { font-weight:700; font-size:16px; }
+.pill { display:inline-block; font-size:12px; padding:2px 8px; border-radius:20px; background:var(--bg); color:var(--muted); margin:2px 2px 0 0; }
+.pill.auto { background:var(--green-soft); color:var(--green); }
+.pill.done { background:var(--blue-soft); color:var(--blue); }
+.table-wrap { overflow-x:auto; }
+#task { position:fixed; left:50%; transform:translateX(-50%); bottom:18px; width:min(760px, calc(100% - 32px));
+        background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 10px 30px rgba(20,30,60,.18);
+        padding:16px 18px; z-index:10; display:none; }
+#task pre { background:#0f1523; color:#cfe3ff; border-radius:9px; padding:10px 12px; max-height:170px; overflow:auto;
+            font-size:12px; margin:10px 0 0; white-space:pre-wrap; }
+.spin { width:16px; height:16px; border:3px solid var(--blue-soft); border-top-color:var(--blue); border-radius:50%;
+        animation:spin 0.9s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#toast { position:fixed; top:80px; right:20px; background:var(--text); color:#fff; padding:12px 16px; border-radius:10px;
+         display:none; z-index:20; max-width:360px; font-size:14px; }
+.hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Naukri <span>Job Hunter</span></h1>
+  <div class="switch" id="hunts"></div>
+  <button class="btn small danger" id="quit" title="Stop the app">Stop app</button>
+</header>
+<nav id="tabs">
+  <button data-view="search">1. Find jobs</button>
+  <button data-view="matches">2. My matches</button>
+  <button data-view="contacts">3. Recruiter contacts</button>
+  <button data-view="prefs">What I'm looking for</button>
+  <button data-view="login">Naukri login</button>
+</nav>
+<main>
+  <div id="setup"></div>
+  <section id="view-search"></section>
+  <section id="view-matches" class="hidden"></section>
+  <section id="view-contacts" class="hidden"></section>
+  <section id="view-prefs" class="hidden"></section>
+  <section id="view-login" class="hidden"></section>
+</main>
+<div id="task"></div>
+<div id="toast"></div>
+
+<script>
+const HEADERS = { "X-Requested-With": "naukri-job-hunter" };
+let S = null;                                   // server state
+let profile = localStorage.getItem("profile") || "default";
+let view = localStorage.getItem("view") || "search";
+let jobs = [];
+let contacts = null;
+let taskSeen = Number(sessionStorage.getItem("taskSeen") || 0);
+let polling = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const list = (a, empty = "any") => (a && a.length ? a.join(", ") : empty);
+
+async function get(path) {
+  const r = await fetch(path, { cache: "no-store" });
+  const data = await r.json();
+  if (!r.ok || data.error) throw new Error(data.error || r.statusText);
+  return data;
+}
+async function post(path, body, raw) {
+  const r = await fetch(path, {
+    method: "POST",
+    headers: raw ? HEADERS : { ...HEADERS, "Content-Type": "application/json" },
+    body: raw ? body : JSON.stringify(body || {}),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) throw new Error(data.error || r.statusText);
+  return data;
+}
+function toast(msg, ms = 3500) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(t._h);
+  t._h = setTimeout(() => (t.style.display = "none"), ms);
+}
+async function run(fn) {
+  try { await fn(); } catch (e) { toast(e.message, 6000); }
+}
+
+const P = () => S.profiles.find((p) => p.id === profile) || S.profiles[0];
+const busy = () => S && S.task.running;
+const huntName = (id) => (id === "default" ? "Regular jobs" : id === "side" ? "Side gigs" : id);
+
+async function refresh() {
+  S = await get("/api/state");
+  if (!S.profiles.some((p) => p.id === profile)) profile = "default";
+  try { jobs = (await get(`/api/jobs?profile=${profile}`)).jobs; } catch { jobs = []; }
+  render();
+  if (S.task.running) watchTask();
+}
+
+function render() {
+  $("hunts").innerHTML = S.profiles.map((p) =>
+    `<button data-p="${esc(p.id)}" class="${p.id === profile ? "on" : ""}">${esc(huntName(p.id))}</button>`).join("");
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+  for (const v of ["search", "matches", "contacts", "prefs", "login"]) $(`view-${v}`).classList.toggle("hidden", v !== view);
+  renderSetup();
+  ({ search: renderSearch, matches: renderMatches, contacts: renderContacts, prefs: renderPrefs, login: renderLogin })[view]();
+  renderTask();
+}
+
+function go(v) {
+  view = v;
+  localStorage.setItem("view", v);
+  render();
+  window.scrollTo(0, 0);
+}
+
+function renderSetup() {
+  const steps = [];
+  if (!P().resume.ok) steps.push(`Upload your resume and check your job titles and years of experience under
+    <a href="#" data-go="prefs">What I'm looking for</a>.`);
+  if (!S.has_login) steps.push(`Optional: save your Naukri login under <a href="#" data-go="login">Naukri login</a> so applying works without typing it each time.`);
+  $("setup").innerHTML = steps.length && view !== "prefs" && view !== "login"
+    ? `<div class="banner"><b>Getting started</b><ul style="margin:6px 0 0">${steps.map((s) => `<li>${s}</li>`).join("")}</ul></div>` : "";
+}
+
+// ------------------------------------------------------------------ 1. Find jobs
+function renderSearch() {
+  const p = P(), pr = p.prefs;
+  $("view-search").innerHTML = `
+    <div class="card">
+      <h2>Find ${profile === "side" ? "side gigs (part-time / freelance / contract)" : "jobs"} that match my resume</h2>
+      <p class="muted">A Chrome window opens and searches Naukri by itself. Leave it open; it takes about 5-20 minutes.
+      Every job gets a match score out of 100.</p>
+      <div class="grid">
+        <div class="fact"><b>Resume</b>${esc(p.resume.ok ? p.resume.name : "not added yet")}</div>
+        <div class="fact"><b>Job titles</b>${esc(list(pr.roles))}</div>
+        <div class="fact"><b>Location</b>${esc(list(pr.locations, "anywhere"))}</div>
+        <div class="fact"><b>Work mode</b>${esc(list(pr.work_modes))}</div>
+        <div class="fact"><b>Job type</b>${esc(list(pr.job_types.map(labelType)))}</div>
+        <div class="fact"><b>Skills</b>${pr.skills.length} skills &middot; ${esc(pr.experience_years ?? "?")} years experience</div>
+      </div>
+      <div class="row" style="margin-bottom:16px">
+        <a href="#" data-go="prefs">Change what I'm looking for</a>
+      </div>
+      <div class="row">
+        <label class="row" style="gap:6px"><input type="checkbox" id="onlyNew" checked> Only jobs I haven't seen before</label>
+        <label class="row" style="gap:6px">Show at most <input type="number" id="limit" min="1" placeholder="all" style="width:80px"> jobs</label>
+      </div>
+      <p style="margin-top:20px"><button class="btn big" id="startSearch" ${busy() || !p.resume.ok ? "disabled" : ""}>Start searching</button></p>
+      ${!p.resume.ok ? `<p class="err">Add your resume first.</p>` : ""}
+    </div>`;
+  $("startSearch").onclick = () => run(async () => {
+    await post("/api/search", { profile, include_seen: !$("onlyNew").checked, limit: $("limit").value || null });
+    toast("Search started. A Chrome window will open.");
+    await refresh();
+  });
+}
+const labelType = (t) => (S.job_types.find((x) => x.id === t) || { label: t }).label;
+
+// ------------------------------------------------------------------ 2. My matches
+function renderMatches() {
+  const el = $("view-matches");
+  if (!jobs.length) {
+    el.innerHTML = `<div class="card"><h2>No matches yet</h2><p class="muted">Run a search first.</p>
+      <button class="btn" data-go="search">Go to Find jobs</button></div>`;
+    return;
+  }
+  const open = jobs.filter((j) => !j.applied);
+  el.innerHTML = `
+    <div class="card">
+      <h2>${jobs.length} matches for ${esc(huntName(profile))}</h2>
+      <p class="muted">Tick the jobs you like, then press <b>Apply to ticked jobs</b>. Jobs marked
+        <span class="pill auto">Naukri (auto)</span> are applied for you; the others open in your browser so you can
+        finish on the company's site. Nothing is applied without your click.</p>
+      <div class="row" style="margin:12px 0">
+        <button class="btn ghost small" id="tickAuto">Tick all auto-apply jobs</button>
+        <button class="btn ghost small" id="tickNone">Untick all</button>
+        <span style="margin-left:auto"></span>
+        <button class="btn" id="applyBtn" ${busy() ? "disabled" : ""}>Apply to ticked jobs</button>
+      </div>
+      <div class="table-wrap"><table>
+        <tr><th></th><th>Score</th><th>Job</th><th>Type</th><th>Experience</th><th>Location</th><th>Posted</th><th>Apply</th></tr>
+        ${jobs.map((j) => `
+          <tr>
+            <td><input type="checkbox" class="pick" value="${esc(j.job_id)}" ${j.applied ? "disabled" : ""}></td>
+            <td class="score">${j.score}</td>
+            <td><a href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a><br>
+              ${esc(j.company)}${j.rating ? " &#9733; " + esc(j.rating) : ""}<br>
+              ${j.skills.slice(0, 6).map((s) => `<span class="pill">${esc(s)}</span>`).join("")}</td>
+            <td>${esc(j.type)}</td><td>${esc(j.experience)}</td><td>${esc(j.location)}</td><td>${esc(j.posted)}</td>
+            <td>${j.applied ? `<span class="pill done">Applied &#10003;</span>` : `<span class="pill ${j.auto ? "auto" : ""}">${esc(j.via)}</span>`}</td>
+          </tr>`).join("")}
+      </table></div>
+      <p class="muted">${open.length} not applied yet.</p>
+    </div>`;
+  const boxes = () => [...document.querySelectorAll(".pick:not(:disabled)")];
+  $("tickAuto").onclick = () => boxes().forEach((b) => (b.checked = jobs.find((j) => j.job_id === b.value).auto));
+  $("tickNone").onclick = () => boxes().forEach((b) => (b.checked = false));
+  $("applyBtn").onclick = () => run(async () => {
+    const ids = boxes().filter((b) => b.checked).map((b) => b.value);
+    if (!ids.length) throw new Error("Tick at least one job first.");
+    const chosen = jobs.filter((j) => ids.includes(j.job_id));
+    const auto = chosen.filter((j) => j.auto).length;
+    const manual = chosen.length - auto;
+    const msg = `Apply to ${chosen.length} job(s)?\n\n` +
+      (auto ? `• ${auto} will be applied automatically on Naukri (a Chrome window opens).\n` : "") +
+      (manual ? `• ${manual} need you to finish on the company's website (links will be shown).` : "");
+    if (!confirm(msg)) return;
+    await post("/api/apply", { profile, job_ids: ids });
+    await refresh();
+  });
+}
+
+// ------------------------------------------------------------------ 3. Contacts
+function renderContacts() {
+  const el = $("view-contacts");
+  const rows = contacts && contacts.profile === profile ? contacts.rows : null;
+  el.innerHTML = `
+    <div class="card">
+      <h2>Recruiter contacts: send your resume yourself</h2>
+      <p class="muted">Opens each of your top matches and collects the emails and phone numbers recruiters published,
+        plus the company website and LinkedIn / careers links. It never guesses email addresses.</p>
+      <div class="row">
+        <label class="row" style="gap:6px">For my top <input type="number" id="topN" value="15" min="1" max="50" style="width:80px"> matches</label>
+        <button class="btn" id="getContacts" ${busy() || !jobs.length ? "disabled" : ""}>Get contacts</button>
+      </div>
+      ${!jobs.length ? `<p class="err">Run a search first.</p>` : ""}
+    </div>
+    ${rows ? `<div class="card">
+      <h2>${rows.filter((r) => r.emails.length).length} of ${rows.length} jobs publish an email</h2>
+      <p class="muted"><b>Draft email</b> opens your email app with the subject and message filled in; attach your resume and send.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Score</th><th>Company / job</th><th>Email</th><th>Phone</th><th>Links</th></tr>
+        ${rows.map((r) => `<tr>
+          <td class="score">${r.score}</td>
+          <td><b>${esc(r.company)}</b>${r.agency ? ` <span class="pill">agency</span>` : ""}<br>
+            <a href="${esc(r.job_url)}" target="_blank" rel="noopener">${esc(r.title)}</a></td>
+          <td>${r.emails.map(esc).join("<br>") || `<span class="muted">not published</span>`}
+            ${r.mailto ? `<br><a class="btn small" href="${esc(r.mailto)}">Draft email</a>` : ""}</td>
+          <td>${r.phones.map((p) => `<a href="tel:${esc(p.replace(/\s/g, ""))}">${esc(p)}</a>`).join("<br>")}</td>
+          <td>${r.website ? `<a href="${esc(r.website.startsWith("http") ? r.website : "https://" + r.website)}" target="_blank" rel="noopener">Website</a><br>` : ""}
+            <a href="${esc(r.careers)}" target="_blank" rel="noopener">Careers page</a><br>
+            <a href="${esc(r.linkedin)}" target="_blank" rel="noopener">Recruiters on LinkedIn</a></td>
+        </tr>`).join("")}
+      </table></div></div>` : ""}`;
+  $("getContacts").onclick = () => run(async () => {
+    await post("/api/contacts", { profile, top: Number($("topN").value) || 15 });
+    await refresh();
+  });
+}
+
+// ------------------------------------------------------------------ Preferences
+function renderPrefs() {
+  const p = P(), pr = p.prefs;
+  const checks = (name, options, chosen) => options.map((o) =>
+    `<label><input type="checkbox" name="${name}" value="${o.id}" ${chosen.includes(o.id) ? "checked" : ""}> ${esc(o.label)}</label>`).join("");
+  $("view-prefs").innerHTML = `
+    <div class="card">
+      <h2>My resume</h2>
+      <p class="muted">Current: <b>${esc(p.resume.ok ? p.resume.name : "none yet")}</b>. Used for both searches.</p>
+      <div class="row">
+        <input type="file" id="resumeFile" accept="application/pdf,.pdf">
+        <label class="row" style="gap:6px"><input type="checkbox" id="resumeSkills" checked> Also update my skills from this resume</label>
+        <button class="btn" id="uploadResume">Upload resume</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>What I'm looking for: ${esc(huntName(profile))}</h2>
+      <p class="muted">Job titles, location, work mode and job type are separate for each search (switch at the top).
+        Skills and experience are shared.</p>
+
+      <label class="field">Job titles to search <small>(one per line)</small></label>
+      <textarea id="roles">${esc(pr.roles.join("\n"))}</textarea>
+
+      <label class="field">Location <small>(cities separated by commas; leave empty for anywhere)</small></label>
+      <input type="text" id="locations" value="${esc(pr.locations.join(", "))}" placeholder="e.g. Bengaluru, Pune">
+
+      <label class="field">Work mode <small>(none ticked = any)</small></label>
+      <div class="checks">${checks("work_modes", S.work_modes, pr.work_modes)}</div>
+
+      <label class="field">Job type <small>(none ticked = any)</small></label>
+      <div class="checks">${checks("job_types", S.job_types, pr.job_types)}</div>
+
+      <label class="field">My skills <small>(separated by commas; jobs mentioning them score higher)</small></label>
+      <textarea id="skills">${esc(pr.skills.join(", "))}</textarea>
+      <p><button class="btn ghost small" id="detectSkills">Find skills in my resume</button></p>
+
+      <label class="field">Years of experience</label>
+      <input type="number" id="years" min="0" max="60" value="${esc(pr.experience_years ?? "")}" style="max-width:140px">
+
+      <p style="margin-top:22px"><button class="btn big" id="savePrefs">Save</button></p>
+    </div>`;
+  const ticked = (name) => [...document.querySelectorAll(`input[name=${name}]:checked`)].map((c) => c.value);
+  const split = (text, sep) => text.split(sep).map((s) => s.trim()).filter(Boolean);
+  $("savePrefs").onclick = () => run(async () => {
+    await post("/api/prefs", {
+      profile,
+      roles: split($("roles").value, /\n|,/),
+      locations: split($("locations").value, ","),
+      work_modes: ticked("work_modes"),
+      job_types: ticked("job_types"),
+      skills: split($("skills").value, ","),
+      experience_years: $("years").value,
+    });
+    toast("Saved.");
+    await refresh();
+  });
+  $("detectSkills").onclick = () => run(async () => {
+    const r = await post("/api/skills/detect", { profile });
+    toast(`Found ${r.skills.length} skills in your resume.`);
+    await refresh();
+  });
+  $("uploadResume").onclick = () => run(async () => {
+    const f = $("resumeFile").files[0];
+    if (!f) throw new Error("Choose your resume PDF first.");
+    const q = `name=${encodeURIComponent(f.name)}&update_skills=${$("resumeSkills").checked ? 1 : 0}`;
+    const r = await post(`/api/resume?${q}`, f, true);
+    toast(`Resume saved. Found ${r.detected.length} skills.`);
+    await refresh();
+  });
+}
+
+// ------------------------------------------------------------------ Login
+function renderLogin() {
+  $("view-login").innerHTML = `
+    <div class="card">
+      <h2>Naukri login</h2>
+      <p>${S.has_login ? `<span class="ok">&#10003; Login saved on this computer.</span>` : "No login saved yet (optional)."}</p>
+      <p class="muted">Saved only on this computer (in the <code>.env</code> file) and used only to sign in to Naukri.
+        Without it, you sign in yourself in the Chrome window when needed.</p>
+      <label class="field">Naukri email</label>
+      <input type="email" id="email" autocomplete="username" style="max-width:380px">
+      <label class="field">Naukri password</label>
+      <input type="password" id="password" autocomplete="current-password" style="max-width:380px">
+      <p style="margin-top:16px"><button class="btn" id="saveLogin">${S.has_login ? "Update login" : "Save login"}</button></p>
+    </div>
+    <div class="card">
+      <h2>Sign in now</h2>
+      <p class="muted">Opens Chrome and signs in to Naukri. If Naukri asks for an OTP or captcha, complete it in that
+        window. You stay signed in for later searches.</p>
+      <button class="btn ghost" id="loginNow" ${busy() ? "disabled" : ""}>Open Chrome and sign in</button>
+    </div>`;
+  $("saveLogin").onclick = () => run(async () => {
+    await post("/api/login-details", { email: $("email").value, password: $("password").value });
+    toast("Login saved.");
+    await refresh();
+  });
+  $("loginNow").onclick = () => run(async () => { await post("/api/login"); await refresh(); });
+}
+
+// ------------------------------------------------------------------ Background task panel
+function renderTask() {
+  const t = S.task, el = $("task");
+  if (!t.id || (!t.running && t.id <= taskSeen)) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  let status;
+  if (t.running) {
+    status = `<span class="spin"></span> <b>${esc(t.name)}...</b>
+      <span class="muted">A Chrome window is doing the work; please don't close it.</span>`;
+  } else if (t.error) {
+    status = `<b class="err">${esc(t.name)} stopped:</b> ${esc(t.error)}`;
+  } else {
+    status = `<b class="ok">&#10003; ${esc(t.name)}: done.</b> ${resultText(t.result)}`;
+  }
+  el.innerHTML = `<div class="row" style="justify-content:space-between">
+      <div>${status}</div>
+      ${t.running ? "" : `<button class="btn small ghost" id="closeTask">Close</button>`}
+    </div>
+    ${resultDetails(t)}
+    <pre id="taskLog">${esc(t.log.slice(-60).join("\n")) || "Starting..."}</pre>`;
+  const log = $("taskLog");
+  log.scrollTop = log.scrollHeight;
+  if (!t.running) $("closeTask").onclick = () => { taskSeen = t.id; sessionStorage.setItem("taskSeen", t.id); render(); };
+}
+
+function resultText(r) {
+  if (!r) return "";
+  if (r.kind === "search") return `Scanned ${r.scanned} jobs, found <b>${r.matches}</b> matches.
+    <a href="#" data-go="matches">See my matches</a> &middot; <a href="/output/${esc(r.report)}" target="_blank">Full report</a>`;
+  if (r.kind === "contacts") return `<a href="#" data-go="contacts">See contacts</a>`;
+  if (r.kind === "login") return "You're signed in to Naukri.";
+  if (r.kind === "apply") return `Applied to ${r.results.filter((x) => x.status === "applied").length} job(s).`;
+  return "";
+}
+
+function resultDetails(t) {
+  const r = t.result;
+  if (t.running || !r || r.kind !== "apply") return "";
+  const statusText = { applied: "Applied", already_applied: "Already applied", needs_manual: "Needs your answers - open it",
+    external: "Finish on the company website", failed: "Couldn't apply - open it" };
+  return `<div style="margin-top:10px; max-height:220px; overflow:auto">
+    ${r.results.map((x) => `<div>${esc(statusText[x.status] || x.status)}: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a> @ ${esc(x.company)}</div>`).join("")}
+    ${r.manual.length ? `<p style="margin:8px 0 4px"><b>Finish these on the company's website:</b></p>
+      ${r.manual.map((m) => `<div><a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a> @ ${esc(m.company)}</div>`).join("")}` : ""}
+    ${r.over_limit ? `<p class="muted">${r.over_limit} more skipped (limit ${r.limit} per round); apply again for the rest.</p>` : ""}
+  </div>`;
+}
+
+function watchTask() {
+  if (polling) return;
+  polling = setInterval(async () => {
+    try {
+      const t = await get("/api/task");
+      const finished = S.task.running && !t.running;
+      S.task = t;
+      if (finished) {
+        clearInterval(polling);
+        polling = null;
+        if (t.result && t.result.kind === "contacts") contacts = t.result;
+        await refresh();
+      } else {
+        renderTask();
+      }
+    } catch {
+      clearInterval(polling);
+      polling = null;
+    }
+  }, 1500);
+}
+
+// ------------------------------------------------------------------ events
+document.addEventListener("click", (e) => {
+  const tab = e.target.closest("#tabs button");
+  if (tab) return go(tab.dataset.view);
+  const hunt = e.target.closest("#hunts button");
+  if (hunt) {
+    profile = hunt.dataset.p;
+    localStorage.setItem("profile", profile);
+    return run(refresh);
+  }
+  const link = e.target.closest("[data-go]");
+  if (link) { e.preventDefault(); go(link.dataset.go); }
+});
+
+$("quit").onclick = () => run(async () => {
+  if (!confirm("Stop Naukri Job Hunter? You can start it again any time.")) return;
+  await post("/api/shutdown");
+  document.body.innerHTML = `<main><div class="card"><h2>Stopped</h2><p class="muted">You can close this tab.
+    To start again, double-click the START-HERE file (or run ./run.sh web).</p></div></main>`;
+});
+
+run(async () => {
+  await refresh();
+  const t = S.task;
+  if (!t.running && t.result && t.result.kind === "contacts") contacts = t.result;
+  render();
+});
+</script>
+</body>
+</html>

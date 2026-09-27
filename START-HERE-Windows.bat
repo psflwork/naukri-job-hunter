@@ -43,15 +43,17 @@ echo (Installing Google Chrome from https://www.google.com/chrome/ is recommende
 type nul > .venv\.chromium-installed
 
 :setup
+if "%~1"=="" goto :web
 if exist config.yaml goto :start
 "%VPY%" hunt.py setup || goto :fail
 
 :start
-if "%~1"=="" (
-  "%VPY%" hunt.py menu
-) else (
-  "%VPY%" hunt.py %*
-)
+"%VPY%" hunt.py %*
+goto :end
+
+:web
+rem The web app has its own first-run steps in the browser.
+"%VPY%" hunt.py web
 goto :end
 
 :fail

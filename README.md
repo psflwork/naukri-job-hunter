@@ -54,34 +54,36 @@ Open the folder and double-click:
 
 </details>
 
-**4. Answer a few questions** (first time only)
+**4. It opens in your web browser**
 
-A window opens and sets itself up; this takes a few minutes. Then it asks for:
+The first time, a small black window sets things up for a few minutes. Then the app opens in your
+web browser. **Keep the black window open** while you use the app; closing it stops the app.
 
-- **Your resume**: drag your resume PDF into the window and press Enter.
-- **Years of experience** and the **job titles** you want, for example *python developer, project manager*.
-- **Your Naukri email and password** (optional). They're saved only on your computer. When you type
-  the password, nothing appears on screen; that's normal.
+The first time, go to **What I'm looking for** and:
 
-**5. Use the menu**
+- upload your **resume** (PDF); your skills are picked up from it automatically,
+- check the **job titles** you want (for example *python developer, project manager*), your
+  **location**, **work mode** (remote / hybrid / office), **job type** (full-time, part-time,
+  freelance, contract) and **years of experience**, then click **Save**.
 
-```text
-  1) Find jobs for me
-  2) Find side gigs (part-time / freelance / contract)
-  3) Show my latest jobs and choose which to apply to
-  4) Get recruiter emails / phone numbers (send resume myself)
-  5) Change what I'm looking for (skills, location, job type...)
-  6) Use a new resume
-  7) Log in to Naukri again
-  8) Start setup again
-  q) Quit
-```
+Optionally, save your Naukri email and password under **Naukri login**. They're stored only on your
+computer.
 
-Type a number and press Enter. When searching, a Chrome window opens by itself and moves through
-Naukri; **don't close it**. A search takes about 5-20 minutes, then a page opens with your best
-matches, each with a match score.
+**5. Find jobs and apply**
 
-Next time, just double-click the START-HERE file again and pick from the menu.
+| Tab | What it does |
+|---|---|
+| **1. Find jobs** | Click **Start searching**. A Chrome window opens by itself and moves through Naukri; **don't close it**. It takes about 5-20 minutes. |
+| **2. My matches** | Your best matches with a score out of 100. Tick the ones you like and click **Apply to ticked jobs**. |
+| **3. Recruiter contacts** | Recruiter emails and phone numbers from the job posts, with a **Draft email** button, so you can send your resume yourself. |
+| **What I'm looking for** | Change resume, job titles, skills, location, work mode, job type and experience. |
+| **Naukri login** | Save your login, or sign in now. |
+
+Use the **Regular jobs / Side gigs** switch at the top to choose between full-time jobs and side gigs
+(part-time, freelance, contract).
+
+Next time, just double-click the START-HERE file again. When you're done, click **Stop app** or close
+the black window.
 
 <details>
 <summary>Common questions</summary>
@@ -94,8 +96,11 @@ Next time, just double-click the START-HERE file again and pick from the menu.
   waits for you and remembers the login next time.
 - **"Python 3.10 or newer is needed".** Install Python as in step 1 (on Windows, with *Add python.exe
   to PATH* ticked), then start again.
-- **It found no jobs.** Choose 5 in the menu and widen your search: more job titles, location
-  *any*, work mode *any*.
+- **It found no jobs.** In **What I'm looking for**, widen your search: more job titles, empty
+  location, no work mode ticked.
+- **The browser page says it can't connect.** The app was stopped; double-click the START-HERE file
+  again.
+- **I prefer the terminal.** Run `./run.sh menu` for a numbered menu with the same actions.
 - **Where are my results?** In the `output` folder inside the tool's folder.
 
 </details>
@@ -129,7 +134,8 @@ After that, just run `./run.sh` (regular jobs) or `./run.sh side` (side gigs) wh
 
 **Requirements:** Python 3.10+ and [Google Chrome](https://www.google.com/chrome/). On macOS and
 Linux use `./run.sh`; on Windows use `START-HERE-Windows.bat` (it accepts the same commands, e.g.
-`START-HERE-Windows.bat search --profile side`). `./run.sh menu` opens the numbered menu.
+`START-HERE-Windows.bat search --profile side`). `./run.sh web` opens the browser app (on
+127.0.0.1 only); `./run.sh menu` opens a numbered menu in the terminal.
 
 > Run it as `./run.sh` from the project folder (with the `./`). It uses its own Python in `.venv`,
 > so you never need to activate anything.
@@ -387,7 +393,8 @@ and job history (`data/`), and reports (`output/`).
 
 | Path | Contents |
 |---|---|
-| `START-HERE-Mac.command` / `START-HERE-Windows.bat` | Double-click launchers that open the menu |
+| `START-HERE-Mac.command` / `START-HERE-Windows.bat` | Double-click launchers that open the web app |
+| `webapp.py` + `web/index.html` | Browser app (`./run.sh web`): local server, background tasks, UI |
 | `run.sh` | One-command entry point: environment, setup wizard, then `hunt.py` |
 | `hunt.py` | CLI, search pipeline, reports |
 | `setup_wizard.py` | First-run setup (configs, resume, experience, roles, login) |
