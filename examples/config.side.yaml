@@ -27,7 +27,7 @@ search:
   remote_only: true
   experience_filter: null  # no Naukri experience filter; junior gigs are dropped below instead
   job_age_days: 30         # gigs are posted less often; look back further
-  max_pages_per_query: 4
+  max_pages_per_query: 2   # 20 jobs per page; lower = faster, fewer Naukri requests
   min_delay_seconds: 3
   max_delay_seconds: 7
   headless: false
