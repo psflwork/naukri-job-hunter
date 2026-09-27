@@ -285,10 +285,12 @@ def print_candidates(jobs: list[Job]) -> None:
 
 def apply_jobs(jobs: list[Job]) -> list[tuple[Job, str]]:
     results = []
+    print("Opening Chrome and checking your Naukri login...")
     with Naukri(headless=False) as n:
         if not (n.ensure_logged_in() or n.login()):
             raise SystemExit("Not logged in. Set NAUKRI_EMAIL/NAUKRI_PASSWORD in .env or run: ./run.sh login")
-        for j in jobs:
+        for i, j in enumerate(jobs, 1):
+            print(f"[{i}/{len(jobs)}] Applying: {j.title} @ {j.company}")
             status = n.apply(j)
             print(f"  {status:16s} {j.title} @ {j.company}")
             if status in ("applied", "already_applied"):

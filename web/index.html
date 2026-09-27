@@ -313,9 +313,12 @@ function renderMatches() {
     return;
   }
   const open = jobs.filter((j) => !j.applied);
+  const autoCount = open.filter((j) => j.auto).length;
   el.innerHTML = `
     <div class="card">
       <h2>${jobs.length} matches for ${esc(huntName(profile))}</h2>
+      <p><b>${autoCount}</b> of ${open.length} open jobs can be applied automatically.
+        ${autoCount < open.length ? `The rest apply on the company's website or ask recruiter questions; those open in your browser for you to finish.` : ""}</p>
       <p class="muted">Tick the jobs you like, then press <b>Apply to ticked jobs</b>. Jobs marked
         <span class="pill auto">Naukri (auto)</span> are applied for you; the others open in your browser so you can
         finish on the company's site. Nothing is applied without your click.</p>
@@ -443,9 +446,9 @@ function renderTask() {
       ${t.running ? "" : `<button class="btn small ghost" id="closeTask">Close</button>`}
     </div>
     ${resultDetails(t)}
-    <pre id="taskLog">${esc(t.log.slice(-60).join("\n")) || "Starting..."}</pre>`;
+    ${t.running || t.log.length ? `<pre id="taskLog">${esc(t.log.slice(-60).join("\n")) || "Starting..."}</pre>` : ""}`;
   const log = $("taskLog");
-  log.scrollTop = log.scrollHeight;
+  if (log) log.scrollTop = log.scrollHeight;
   if (!t.running) $("closeTask").onclick = () => { taskSeen = t.id; sessionStorage.setItem("taskSeen", t.id); render(); };
 }
 
@@ -455,19 +458,26 @@ function resultText(r) {
     <a href="#" data-go="matches">See my matches</a> &middot; <a href="/output/${esc(r.report)}" target="_blank">Full report</a>`;
   if (r.kind === "contacts") return `<a href="#" data-go="contacts">See contacts</a>`;
   if (r.kind === "login") return "You're signed in to Naukri.";
-  if (r.kind === "apply") return `Applied to ${r.results.filter((x) => x.status === "applied").length} job(s).`;
+  if (r.kind === "apply") {
+    const parts = [];
+    if (r.results.length || !r.manual.length) parts.push(`Applied to <b>${r.applied}</b> job(s) on Naukri.`);
+    if (r.manual.length) parts.push(`<b>${r.manual.length}</b> need you to finish them yourself; ${r.opened} opened in new browser tabs.`);
+    return parts.join(" ");
+  }
   return "";
 }
 
 function resultDetails(t) {
   const r = t.result;
   if (t.running || !r || r.kind !== "apply") return "";
-  const statusText = { applied: "Applied", already_applied: "Already applied", needs_manual: "Needs your answers - open it",
-    external: "Finish on the company website", failed: "Couldn't apply - open it" };
-  return `<div style="margin-top:10px; max-height:220px; overflow:auto">
-    ${r.results.map((x) => `<div>${esc(statusText[x.status] || x.status)}: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a> @ ${esc(x.company)}</div>`).join("")}
-    ${r.manual.length ? `<p style="margin:8px 0 4px"><b>Finish these on the company's website:</b></p>
-      ${r.manual.map((m) => `<div><a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a> @ ${esc(m.company)}</div>`).join("")}` : ""}
+  const done = r.results.filter((x) => x.status === "applied" || x.status === "already_applied");
+  return `<div style="margin-top:10px; max-height:240px; overflow:auto">
+    ${done.map((x) => `<div class="ok">&#10003; ${x.status === "applied" ? "Applied" : "Already applied"}:
+      <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a> @ ${esc(x.company)}</div>`).join("")}
+    ${r.manual.length ? `<p style="margin:8px 0 4px"><b>Finish these yourself</b>
+      <span class="muted">(Naukri doesn't allow automatic applying for them):</span></p>
+      ${r.manual.map((m) => `<div>&bull; <a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a>
+        @ ${esc(m.company)} <span class="muted">&mdash; ${esc(m.reason)}</span></div>`).join("")}` : ""}
     ${r.over_limit ? `<p class="muted">${r.over_limit} more skipped (limit ${r.limit} per round); apply again for the rest.</p>` : ""}
   </div>`;
 }

@@ -156,6 +156,14 @@ def task_search(profile: str, include_seen: bool, limit: int | None):
             "shown": len(r["results"]), "report": r["html"].name}
 
 
+MANUAL_REASONS = {
+    "external": "applies on the company's website",
+    "needs_manual": "needs answers to recruiter questions",
+    "failed": "couldn't be applied automatically",
+}
+MAX_TABS = 10
+
+
 def task_apply(profile: str, job_ids: list[str]):
     cfg = load_config(profile)
     applied = load_json(APPLIED_FILE, {})
@@ -163,14 +171,30 @@ def task_apply(profile: str, job_ids: list[str]):
     auto = [j for j in chosen if can_auto_apply(cfg, j) and j.job_id not in applied]
     cap = cfg.get("apply", {}).get("max_per_run", 10)
     skipped = auto[cap:]
-    manual = [{"title": j.title, "company": j.company, "url": j.url} for j in chosen if not can_auto_apply(cfg, j)]
+
+    def manual_item(j: Job, status: str) -> dict:
+        return {"title": j.title, "company": j.company, "url": j.url, "reason": MANUAL_REASONS[status]}
+
+    manual = [manual_item(j, "external" if j.external_apply else "needs_manual")
+              for j in chosen if not can_auto_apply(cfg, j)]
+    print(f"You ticked {len(chosen)} job(s): {len(auto[:cap])} can be applied automatically, "
+          f"{len(manual)} need you to finish them yourself.")
+
     results = []
     if auto[:cap]:
-        print(f"Applying to {len(auto[:cap])} jobs on Naukri...")
-        results = [{"title": j.title, "company": j.company, "url": j.url, "status": status}
-                   for j, status in apply_jobs(auto[:cap])]
+        for j, status in apply_jobs(auto[:cap]):
+            results.append({"title": j.title, "company": j.company, "url": j.url, "status": status})
+            if status in MANUAL_REASONS:
+                manual.append(manual_item(j, status))
+
+    if manual:
+        print(f"Opening {min(len(manual), MAX_TABS)} job(s) in your browser so you can finish applying:")
+        for m in manual[:MAX_TABS]:
+            print(f"  {m['title']} @ {m['company']} ({m['reason']})")
+            webbrowser.open_new_tab(m["url"])
     return {"kind": "apply", "profile": profile, "results": results, "manual": manual,
-            "over_limit": len(skipped), "limit": cap}
+            "applied": sum(1 for r in results if r["status"] == "applied"),
+            "opened": min(len(manual), MAX_TABS), "over_limit": len(skipped), "limit": cap}
 
 
 def task_contacts(profile: str, top: int):
