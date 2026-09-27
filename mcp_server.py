@@ -211,6 +211,35 @@ async def apply_to_job(job_id: str, confirm: bool = False) -> dict:
 
 
 @mcp.tool()
+async def get_contacts(profile: str = DEFAULT_PROFILE, limit: int = 15) -> dict:
+    """Contact details for sending a resume manually, for the top jobs of a profile's latest search.
+
+    Returns per job: recruiter emails/phones published in the job post, company website and address,
+    a prefilled mailto draft, and LinkedIn-recruiter / careers-page search links. Also writes an HTML
+    contact list. Never guess email addresses that aren't in the data.
+    """
+    from contacts import build_rows, fetch_details, resume_name, write_contacts
+    from hunt import DATA, OUTPUT, save_json
+
+    cfg = load_config(profile)
+    jobs = _latest(profile)[:limit]
+    if not jobs:
+        return {"error": f"no results for profile {profile}; call search_jobs first"}
+    cache_file = DATA / "job_details.json"
+
+    def run():
+        with _browser_lock:
+            return fetch_details(jobs, load_json(cache_file, {}), headless=cfg["search"].get("headless", False))
+
+    details = await anyio.to_thread.run_sync(run)
+    save_json(cache_file, details)
+    name = (cfg.get("outreach") or {}).get("name") or resume_name(find_resume(ROOT, cfg.get("resume_path")))
+    rows = build_rows(jobs, details, cfg, name)
+    _, html_path = write_contacts(rows, OUTPUT, "contacts" if profile == DEFAULT_PROFILE else f"{profile}_contacts")
+    return {"contact_list_html": str(html_path), "with_email": sum(1 for r in rows if r["emails"]), "jobs": rows}
+
+
+@mcp.tool()
 async def list_applied() -> dict:
     """List jobs already applied to through this tool."""
     applied = load_json(APPLIED_FILE, {})

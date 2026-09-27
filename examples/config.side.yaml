@@ -202,3 +202,19 @@ apply:
   max_per_run: 10
   max_per_day: 15
   skip_questionnaires: true
+
+# Email template for `./run.sh contacts` ("Draft email" links).
+# Placeholders: {title} {company} {job_url} {name} {experience_years}
+outreach:
+  name: ""                 # your name; empty = first line of your resume
+  subject: "Application for {title} - {name}"
+  body: |
+    Hi,
+
+    I came across the {title} role at {company} on Naukri ({job_url}) and would like to apply.
+    I have {experience_years} years of relevant experience; my resume is attached.
+
+    Looking forward to hearing from you.
+
+    Regards,
+    {name}

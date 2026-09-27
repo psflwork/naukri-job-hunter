@@ -28,6 +28,9 @@ If a tool fails because `config.yaml` is missing, tell the user to run `./run.sh
      domain fit with the resume, red flags (unrelated stack, vague description, low company rating).
 4. Present a shortlist table: fit (High/Medium/Low), title, company, exp, apply type, one-line reason, link.
 5. For each High-fit job, offer a 3-4 line tailored pitch using concrete resume achievements.
+6. Offer the three ways to proceed: auto-apply (approved jobs only), the user applies from the links,
+   or `get_contacts` for recruiter emails/phones to send the resume manually (with a tailored email).
+   Only report emails/phones present in the data; never guess addresses.
 
 ## Applying — strict rules
 

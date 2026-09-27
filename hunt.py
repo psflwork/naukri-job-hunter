@@ -11,6 +11,9 @@
   ./run.sh open --top 10             # open the top matches from the latest report in your browser
   ./run.sh apply --top 10            # dry run: show which jobs would be auto-applied
   ./run.sh apply --top 10 --confirm  # actually apply (Naukri-native apply only)
+  ./run.sh pick                      # numbered list of matches; choose which to apply to
+  ./run.sh contacts                  # emails / phones / links to send your resume manually
+  ./run.sh side pick                 # any command for the side-gig profile
 
 Profiles: "default" uses config.yaml; any other name uses config.<name>.yaml.
 """
@@ -252,23 +255,121 @@ def cmd_apply(cfg: dict, args) -> None:
     apply_jobs(candidates)
 
 
+def can_auto_apply(cfg: dict, job: Job) -> bool:
+    skip_q = cfg.get("apply", {}).get("skip_questionnaires", True)
+    return not job.external_apply and not (job.has_questionnaire and skip_q)
+
+
+def parse_selection(text: str, count: int) -> list[int]:
+    """'1,3,5-7' -> [0, 2, 4, 5, 6] (valid 0-based indexes only)."""
+    picked: list[int] = []
+    for part in text.replace(" ", "").split(","):
+        if "-" in part:
+            start, _, end = part.partition("-")
+            if start.isdigit() and end.isdigit():
+                picked.extend(range(int(start), int(end) + 1))
+        elif part.isdigit():
+            picked.append(int(part))
+    return [i - 1 for i in dict.fromkeys(picked) if 1 <= i <= count]
+
+
+def _ask(prompt: str) -> str:
+    try:
+        return input(prompt).strip()
+    except EOFError:
+        return ""
+
+
+def cmd_pick(cfg: dict, args) -> None:
+    """Show the latest matches as a numbered list and apply to the ones you choose."""
+    applied = load_json(APPLIED_FILE, {})
+    jobs = [j for j in latest_jobs(cfg, args.top) if j.job_id not in applied]
+    if not jobs:
+        print("Nothing new to apply to.")
+        return
+    print(f"\n{'#':>3}  {'Score':>5}  {'Apply via':18s}  Job")
+    for i, j in enumerate(jobs, 1):
+        via = "auto (Naukri)" if can_auto_apply(cfg, j) else ("company site" if j.external_apply else "Naukri + questions")
+        print(f"{i:>3}  {j.score:>5}  {via:18s}  {j.title[:60]} @ {j.company[:30]}")
+    answer = _ask("\nJobs to apply to (e.g. 1,3,5-7 | a = all auto-apply | Enter = cancel): ").lower()
+    if not answer:
+        print("Cancelled.")
+        return
+    chosen = [j for j in jobs if can_auto_apply(cfg, j)] if answer == "a" else [jobs[i] for i in parse_selection(answer, len(jobs))]
+    auto = [j for j in chosen if can_auto_apply(cfg, j)]
+    manual = [j for j in chosen if not can_auto_apply(cfg, j)]
+    if auto:
+        print(f"\nAuto-applying to {len(auto)} jobs...")
+        apply_jobs(auto)
+    if manual:
+        print(f"\nOpening {len(manual)} jobs that need company-site or questionnaire answers in your browser:")
+        for j in manual:
+            print(f"  {j.title} @ {j.company}")
+            webbrowser.open_new_tab(j.url)
+
+
+def cmd_contacts(cfg: dict, args) -> None:
+    """Build a contact list (emails, phones, websites, LinkedIn/careers links) for the latest matches."""
+    from contacts import build_rows, fetch_details, resume_name, write_contacts
+
+    jobs = latest_jobs(cfg, args.top)
+    cache_file = DATA / "job_details.json"
+    details = fetch_details(jobs, load_json(cache_file, {}), headless=cfg["search"].get("headless", False))
+    save_json(cache_file, details)
+
+    name = (cfg.get("outreach") or {}).get("name") or resume_name(find_resume(ROOT, cfg.get("resume_path")))
+    rows = build_rows(jobs, details, cfg, name)
+    profile = cfg.get("_profile", DEFAULT_PROFILE)
+    csv_path, html_path = write_contacts(rows, OUTPUT, "contacts" if profile == DEFAULT_PROFILE else f"{profile}_contacts")
+
+    print(f"\n{sum(1 for r in rows if r['emails'])} of {len(rows)} jobs publish an email:")
+    for r in rows:
+        if r["emails"] or r["phones"]:
+            print(f"  {r['company'][:30]:30s}  {', '.join(r['emails'] + r['phones'])}")
+    print(f"\nContacts: {html_path}\nCSV:      {csv_path}")
+    if not getattr(args, "no_open", False):
+        webbrowser.open(html_path.as_uri())
+
+
+def post_search_menu(cfg: dict, args) -> None:
+    while True:
+        eligible = [j for j in latest_jobs(cfg, args.top) if can_auto_apply(cfg, j)
+                    and j.job_id not in load_json(APPLIED_FILE, {})]
+        print(f"""
+What next?
+  [a] Auto-apply to {len(eligible)} eligible jobs (of top {args.top})
+  [p] Pick jobs to apply to
+  [c] Contact list: emails / phones / links to send your resume manually
+  [o] Open top {args.top} jobs in your browser
+  [q] Quit""")
+        choice = _ask("Choose: ").lower()
+        if choice == "a":
+            if eligible:
+                print_candidates(eligible)
+                apply_jobs(eligible)
+            else:
+                print("No jobs eligible for auto-apply.")
+        elif choice == "p":
+            cmd_pick(cfg, args)
+        elif choice == "c":
+            cmd_contacts(cfg, args)
+        elif choice == "o":
+            cmd_open(cfg, args)
+        else:
+            return
+
+
 def cmd_run(cfg: dict, args) -> None:
-    """Full pipeline: log in, search, report, then offer to apply to the top matches."""
+    """Full pipeline: log in, search, report, then a menu to apply / pick / get contacts."""
     cmd_search(cfg, args)
     if args.no_apply or not load_json(latest_file(cfg), []):
         return
-    print()
-    candidates = apply_candidates(cfg, args.top)
-    if not candidates:
-        print("\nNo jobs eligible for auto-apply; apply to the others from the report.")
+    if args.apply:
+        candidates = apply_candidates(cfg, args.top)
+        print_candidates(candidates)
+        apply_jobs(candidates)
         return
-    print_candidates(candidates)
-    if not args.apply:
-        answer = input(f"\nApply to these {len(candidates)} jobs now? [y/N] ").strip().lower()
-        if answer not in ("y", "yes"):
-            print("Skipped applying. Open the report to apply manually.")
-            return
-    apply_jobs(candidates)
+    post_search_menu(cfg, args)
 
 
 def main() -> None:
@@ -293,6 +394,11 @@ def main() -> None:
     ap = sub.add_parser("apply", parents=[common])
     ap.add_argument("--top", type=int, default=10)
     ap.add_argument("--confirm", action="store_true", help="actually apply (default is dry run)")
+    pk = sub.add_parser("pick", parents=[common], help="numbered list of matches; choose which to apply to")
+    pk.add_argument("--top", type=int, default=25)
+    ct = sub.add_parser("contacts", parents=[common], help="emails/phones/links to send your resume manually")
+    ct.add_argument("--top", type=int, default=25)
+    ct.add_argument("--no-open", action="store_true", help="don't open the HTML contact list")
     sub.add_parser("setup", help="first-run wizard: resume, experience, roles, Naukri login")
     args = p.parse_args(sys.argv[1:] or ["run"])
 
@@ -302,7 +408,8 @@ def main() -> None:
     if not config_path(DEFAULT_PROFILE).exists():
         raise SystemExit("No config.yaml yet. Run: ./run.sh setup")
     cfg = load_config(args.profile)
-    commands = {"run": cmd_run, "login": cmd_login, "search": cmd_search, "open": cmd_open, "apply": cmd_apply}
+    commands = {"run": cmd_run, "login": cmd_login, "search": cmd_search, "open": cmd_open, "apply": cmd_apply,
+                "pick": cmd_pick, "contacts": cmd_contacts}
     commands[args.cmd](cfg, args)
 
 

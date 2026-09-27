@@ -9,7 +9,9 @@ Cursor, Claude Desktop and other MCP clients).
 - Resume-based match score (0-100) with matched skills per job
 - Two hunts: regular remote jobs, and side gigs you can do alongside a job
 - Only shows new jobs each run; HTML + CSV reports
-- Optional auto-apply with dry run, confirmation and daily caps
+- Choose how to apply: auto-apply, pick jobs from a numbered list, or get a **contact list**
+  (recruiter emails, phones, company links, prefilled email drafts) to send your resume yourself
+- Auto-apply has a dry run, confirmation and daily caps
 - Your resume, login and results stay on your machine
 
 ## Quick start
@@ -26,8 +28,16 @@ The first run:
 2. asks for your **resume PDF** (drag the file into the terminal), **years of experience** and the
    **roles** you want,
 3. asks for your **Naukri email/password** (optional; saved only locally in `.env`), then
-4. opens Chrome, searches Naukri, scores the jobs and opens the report. At the end it asks
-   `Apply to these N jobs now? [y/N]`.
+4. opens Chrome, searches Naukri, scores the jobs and opens the report, then shows a menu:
+
+```text
+What next?
+  [a] Auto-apply to 4 eligible jobs (of top 10)
+  [p] Pick jobs to apply to
+  [c] Contact list: emails / phones / links to send your resume manually
+  [o] Open top 10 jobs in your browser
+  [q] Quit
+```
 
 After that, just run `./run.sh` (regular jobs) or `./run.sh side` (side gigs) whenever you want.
 
@@ -40,24 +50,31 @@ work out of the box; on Windows use [WSL](https://learn.microsoft.com/windows/ws
 ## Usage
 
 ```bash
-./run.sh                 # regular hunt: search, report, ask before applying
+./run.sh                 # regular hunt: search, report, then the menu above
 ./run.sh side            # side-gig hunt (part-time / freelance / contract)
 ./run.sh --no-apply      # search + report only
-./run.sh --apply         # apply without asking (for scheduled runs)
+./run.sh --apply         # auto-apply without the menu (for scheduled runs)
 ./run.sh --all           # include jobs already seen in earlier runs
-./run.sh --top 20        # consider the top 20 matches for applying
+./run.sh --top 20        # consider the top 20 matches in the menu
 ./run.sh setup           # re-run the setup wizard
 ```
 
-Individual steps (add `--profile side` for the gig hunt):
+### Shortcuts
 
-```bash
-./run.sh login                     # log in and save the session
-./run.sh search                    # search + report only
-./run.sh open --top 10             # open top 10 matches in your browser
-./run.sh apply --top 10            # dry run: what would be auto-applied
-./run.sh apply --top 10 --confirm  # actually apply
-```
+Work on the latest search results; put `side` first for the gig hunt (`./run.sh side pick`).
+
+| Shortcut | What it does |
+|---|---|
+| `./run.sh pick` | Numbered list of matches; type `1,3,5-7` to apply to those (or `a` for all auto-applicable). Company-site / questionnaire jobs open in your browser |
+| `./run.sh contacts` | Contact list for sending your resume yourself: recruiter emails and phones published in the job posts, company website/address, **Draft email** button (prefilled subject + message), and LinkedIn-recruiter / careers-page links |
+| `./run.sh open --top 10` | Open the top 10 matches in your browser |
+| `./run.sh apply --top 10` | Dry run: what would be auto-applied (`--confirm` to apply) |
+| `./run.sh search` | Search + report only |
+| `./run.sh login` | Log in and save the session |
+
+The contact list only shows emails/phones that recruiters actually published (Naukri hides recruiter
+details otherwise); it never guesses addresses. Edit the email template under `outreach` in your
+config.
 
 Search every morning at 9:00 without applying (`crontab -e`):
 
@@ -196,6 +213,7 @@ sequenceDiagram
 | `get_job_details` | Full description, key skills, role, industry, applicants, company |
 | `login_status` / `login` | Check or refresh the Naukri session |
 | `apply_to_job` | Preview by default; applies only with `confirm=true` |
+| `get_contacts` | Recruiter emails/phones, company links and email drafts for manual outreach |
 | `list_applied` | Jobs already applied to |
 
 ## Configuration
@@ -223,6 +241,7 @@ in your resume, experience and roles. Edit them any time to tune results:
 | `min_score` | Minimum score to appear in results |
 | `apply.max_per_run` / `max_per_day` | Caps for CLI and agent auto-apply |
 | `apply.skip_questionnaires` | Leave jobs with recruiter questions to you |
+| `outreach.name` / `subject` / `body` | Email template for the contact list's "Draft email" links |
 
 ## Privacy
 
@@ -250,6 +269,7 @@ and job history (`data/`), and reports (`output/`).
 | `setup_wizard.py` | First-run setup (configs, resume, experience, roles, login) |
 | `naukri.py` | Browser automation: search, job details, login, apply |
 | `matcher.py` | Resume parsing, gig-signal detection and scoring |
+| `contacts.py` | Contact list: emails/phones from job posts, company links, email drafts |
 | `mcp_server.py` | MCP server for AI agents |
 | `examples/` | Config templates for the regular and side-gig hunts |
 | `.cursor/` | Cursor MCP registration and agent rule |

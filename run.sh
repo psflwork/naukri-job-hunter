@@ -4,6 +4,9 @@
 #   ./run.sh side         same, using the side-gig profile (config.side.yaml)
 #   ./run.sh --apply      same, apply without asking (for cron/scheduled runs)
 #   ./run.sh --no-apply   search and report only
+#   ./run.sh pick         numbered list of matches; choose which to apply to
+#   ./run.sh contacts     emails / phones / links to send your resume manually
+#   ./run.sh side pick    any command for the side-gig profile
 #   ./run.sh setup        re-run the setup wizard
 #   ./run.sh search|open|apply|login ...   run a single step (see: ./run.sh --help)
 set -euo pipefail
@@ -45,12 +48,23 @@ if [ ! -f config.yaml ] && [ "${1:-}" != "setup" ]; then
   .venv/bin/python hunt.py setup
 fi
 
+COMMANDS="run login search open apply pick contacts"
+is_command() { [[ " $COMMANDS " == *" ${1:-} "* ]]; }
+
 case "${1:-}" in
-  run|login|search|open|apply|setup|-h|--help) exec .venv/bin/python hunt.py "$@" ;;
+  setup|-h|--help) exec .venv/bin/python hunt.py "$@" ;;
 esac
+if is_command "${1:-}"; then
+  exec .venv/bin/python hunt.py "$@"
+fi
 if [ -n "${1:-}" ] && [ -f "config.$1.yaml" ]; then
   profile="$1"
   shift
+  if is_command "${1:-}"; then
+    cmd="$1"
+    shift
+    exec .venv/bin/python hunt.py "$cmd" --profile "$profile" "$@"
+  fi
   exec .venv/bin/python hunt.py run --profile "$profile" "$@"
 fi
 exec .venv/bin/python hunt.py run "$@"

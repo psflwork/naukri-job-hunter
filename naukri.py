@@ -36,6 +36,19 @@ def load_env(path: Path = Path(__file__).parent / ".env") -> None:
 load_env()
 
 
+EMAIL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+PHONE_RE = re.compile(r"(?<!\d)(?:\+91[\s-]?|0)?[6-9]\d{4}[\s-]?\d{5}(?!\d)|\+\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}")
+
+
+def extract_emails(text: str) -> list[str]:
+    found = {e.strip(".").lower() for e in EMAIL_RE.findall(text or "")}
+    return sorted(e for e in found if not e.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")))
+
+
+def extract_phones(text: str) -> list[str]:
+    return sorted({re.sub(r"[\s-]+", " ", p).strip() for p in PHONE_RE.findall(text or "")})
+
+
 def credentials() -> tuple[str, str] | None:
     email, password = os.environ.get("NAUKRI_EMAIL"), os.environ.get("NAUKRI_PASSWORD")
     return (email, password) if email and password else None
@@ -219,6 +232,8 @@ class Naukri:
         jd = resp_info.value.json().get("jobDetails", {})
         skills = jd.get("keySkills") or {}
         company = jd.get("companyDetail") or {}
+        contact_text = " ".join([jd.get("description", ""), jd.get("shortDescription", ""), company.get("details", "")])
+        contact_text = re.sub(r"<[^>]+>", " ", contact_text.replace("mailto:", " "))
         return {
             "job_id": str(jd.get("jobId", "")),
             "title": jd.get("title", ""),
@@ -241,6 +256,12 @@ class Naukri:
             "summary": jd.get("shortDescription", ""),
             "description": strip_html(jd.get("description", "")),
             "about_company": strip_html(company.get("details", ""))[:1500],
+            "emails": extract_emails(contact_text),
+            "phones": extract_phones(contact_text),
+            "website": (company.get("websiteUrl") or "").strip(),
+            "address": re.sub(r"\s+", " ", company.get("address") or "").strip(" ,"),
+            "hiring_for": (company.get("hiringFor") or "").strip(),
+            "recruitment_agency": bool(jd.get("consultant")),
         }
 
     def apply(self, job: Job) -> str:
