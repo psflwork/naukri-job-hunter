@@ -121,7 +121,8 @@ async def search_jobs(
     return {
         "profile": profile,
         "scanned_unique_jobs": r["scanned"],
-        "matches": len(r["results"]),
+        "matches": r["total_matches"],
+        "returned_after_max_results": len(r["results"]),
         "min_score": r["min_score"],
         "report_html": str(r["html"]),
         "jobs": [_summary(j) for j in r["results"][:limit]],

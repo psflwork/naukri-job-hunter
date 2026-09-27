@@ -97,6 +97,10 @@ skills:
 # Only jobs scoring at least this (0-100) go into the report.
 min_score: 50
 
+# Max jobs per run in the report/menu (best scores first), e.g. 10. Empty = no limit.
+# Extra matches are not marked as seen, so they show up in later runs.
+max_results:
+
 apply:
   max_per_run: 10          # hard cap on auto-applies per CLI run
   max_per_day: 15          # hard cap on auto-applies per day via the MCP agent

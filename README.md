@@ -55,6 +55,7 @@ work out of the box; on Windows use [WSL](https://learn.microsoft.com/windows/ws
 ./run.sh --no-apply      # search + report only
 ./run.sh --apply         # auto-apply without the menu (for scheduled runs)
 ./run.sh --all           # include jobs already seen in earlier runs
+./run.sh --limit 10      # only the 10 best matches this run (default: max_results in config)
 ./run.sh --top 20        # consider the top 20 matches in the menu
 ./run.sh setup           # re-run the setup wizard
 ```
@@ -239,6 +240,7 @@ in your resume, experience and roles. Edit them any time to tune results:
 | `require_gig_keywords` | Keep only jobs with a gig signal |
 | `weights` | Score weights: `skills`, `title`, `experience`, `remote`, `gig` |
 | `min_score` | Minimum score to appear in results |
+| `max_results` | Max jobs per run (best first); the rest aren't marked seen and show up later |
 | `apply.max_per_run` / `max_per_day` | Caps for CLI and agent auto-apply |
 | `apply.skip_questionnaires` | Leave jobs with recruiter questions to you |
 | `outreach.name` / `subject` / `body` | Email template for the contact list's "Draft email" links |

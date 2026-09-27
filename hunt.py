@@ -87,8 +87,10 @@ def cmd_login(cfg: dict, args) -> None:
 
 def run_search(cfg: dict, *, include_seen: bool = False, queries: list[str] | None = None,
                remote_only: bool | None = None, job_age_days: int | None = None,
-               max_pages: int | None = None, min_score: int | None = None) -> dict:
+               max_pages: int | None = None, min_score: int | None = None,
+               limit: int | None = None) -> dict:
     s = cfg["search"]
+    limit = limit or cfg.get("max_results")
     queries = queries or cfg["queries"]
     remote_only = s.get("remote_only", True) if remote_only is None else remote_only
     job_age_days = job_age_days or s.get("job_age_days", 7)
@@ -123,19 +125,24 @@ def run_search(cfg: dict, *, include_seen: bool = False, queries: list[str] | No
         if matcher.score(job) >= min_score:
             results.append(job)
     results.sort(key=lambda j: j.score, reverse=True)
+    total_matches = len(results)
+    held_back = {j.job_id for j in results[limit:]} if limit else set()
+    results = results[:limit] if limit else results
 
-    save_json(seen_file(cfg), sorted(seen | set(found)))
+    # Matches cut by the limit stay unseen so they can show up in a later run.
+    save_json(seen_file(cfg), sorted((seen | set(found)) - held_back))
     save_json(latest_file(cfg), [asdict(j) for j in results])
     csv_path, html_path = write_reports(results, cfg)
-    return {"scanned": len(found), "min_score": min_score, "results": results,
-            "csv": csv_path, "html": html_path}
+    return {"scanned": len(found), "min_score": min_score, "results": results, "total_matches": total_matches,
+            "limit": limit, "csv": csv_path, "html": html_path}
 
 
 def cmd_search(cfg: dict, args) -> None:
     print(f"Profile: {cfg.get('profile_name', cfg['_profile'])}")
-    r = run_search(cfg, include_seen=args.all)
+    r = run_search(cfg, include_seen=args.all, limit=args.limit)
     results = r["results"]
-    print(f"\nScanned {r['scanned']} unique jobs -> {len(results)} matches (score >= {r['min_score']})")
+    shown = f", showing top {len(results)}" if len(results) < r["total_matches"] else ""
+    print(f"\nScanned {r['scanned']} unique jobs -> {r['total_matches']} matches (score >= {r['min_score']}){shown}")
     for j in results[:15]:
         print(f"  {j.score:3d}  {j.title[:55]:55s}  {j.company[:25]:25s}  {j.experience}")
     print(f"\nReport: {r['html']}\nCSV:    {r['csv']}")
@@ -381,6 +388,7 @@ def main() -> None:
     sub = p.add_subparsers(dest="cmd")
     rp = sub.add_parser("run", parents=[common], help="login + search + report + optional apply")
     rp.add_argument("--all", action="store_true", help="include jobs seen in previous runs")
+    rp.add_argument("--limit", type=int, help="max jobs in the results (overrides max_results)")
     rp.add_argument("--no-open", action="store_true", help="don't open the HTML report")
     rp.add_argument("--top", type=int, default=10, help="how many top matches to consider for applying")
     rp.add_argument("--apply", action="store_true", help="apply without asking (for scheduled runs)")
@@ -388,6 +396,7 @@ def main() -> None:
     sub.add_parser("login", parents=[common])
     sp = sub.add_parser("search", parents=[common])
     sp.add_argument("--all", action="store_true", help="include jobs seen in previous runs")
+    sp.add_argument("--limit", type=int, help="max jobs in the results (overrides max_results)")
     sp.add_argument("--no-open", action="store_true", help="don't open the HTML report")
     op = sub.add_parser("open", parents=[common])
     op.add_argument("--top", type=int, default=10)
