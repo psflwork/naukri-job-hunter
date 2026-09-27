@@ -23,7 +23,7 @@ from naukri import Job, Naukri, credentials
 from options import JOB_TYPE_LABELS, JOB_TYPES, WORK_MODES, describe
 from preferences import RESUMES_DIR, apply_overrides, set_pref, summary, use_resume
 from setup_wizard import _copy_examples, save_credentials
-from skills import detect_skills
+from skills import detect_experience, detect_roles, detect_skills
 
 APP_ID = "naukri-job-hunter"
 DEFAULT_PORT = 8765
@@ -225,6 +225,13 @@ def upload_resume(filename: str, data: bytes, update_skills: bool) -> dict:
     return {"ok": True, "resume": name, "detected": detected}
 
 
+def resume_suggestions(profile: str) -> dict:
+    """Skills, experience and job titles read from the resume; nothing is saved."""
+    cfg = load_config(profile)
+    text = read_resume(find_resume(ROOT, cfg.get("resume_path")))
+    return {"skills": detect_skills(text), "experience_years": detect_experience(text), "roles": detect_roles(text)}
+
+
 def detect_resume_skills(profile: str) -> dict:
     cfg = load_config(profile)
     detected = detect_skills(read_resume(find_resume(ROOT, cfg.get("resume_path"))))
@@ -311,6 +318,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(save_prefs(body))
             if url.path == "/api/skills/detect":
                 return self._json(detect_resume_skills(profile))
+            if url.path == "/api/resume/sync":
+                return self._json(resume_suggestions(profile))
             if url.path == "/api/login-details":
                 return self._json(save_login(body))
             if url.path == "/api/search":

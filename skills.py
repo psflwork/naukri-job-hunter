@@ -35,6 +35,22 @@ SKILL_VOCABULARY = [
 ]
 
 
+ROLE_TITLES = [
+    "director of engineering", "head of engineering", "senior engineering manager", "engineering manager",
+    "delivery manager", "program manager", "project manager", "product manager", "scrum master",
+    "principal engineer", "staff engineer", "lead engineer", "technical lead", "tech lead", "team lead",
+    "solution architect", "solutions architect", "software architect", "technical architect",
+    "enterprise architect", "cloud architect", "data architect",
+    "senior software engineer", "software engineer", "senior software developer", "software developer",
+    "full stack developer", "full stack engineer", "frontend developer", "front end developer",
+    "backend developer", "back end developer", "python developer", "java developer", "react developer",
+    "node.js developer", "mobile developer", "android developer", "ios developer",
+    "devops engineer", "site reliability engineer", "cloud engineer", "data engineer", "data scientist",
+    "data analyst", "machine learning engineer", "ai engineer", "qa engineer", "test engineer",
+    "business analyst", "ui/ux designer",
+]
+
+
 def _contains(text: str, term: str) -> bool:
     return re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9+#])", text) is not None
 
@@ -43,6 +59,26 @@ def detect_skills(resume_text: str) -> list[str]:
     """Vocabulary skills that appear in the resume, in vocabulary order."""
     text = resume_text.lower()
     return [s for s in SKILL_VOCABULARY if _contains(text, s)]
+
+
+def detect_experience(resume_text: str) -> int | None:
+    """Total years of experience stated in the resume, e.g. '12+ years of experience'."""
+    text = re.sub(r"\s+", " ", resume_text.lower())
+    years = [float(m) for m in re.findall(
+        r"(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)(?:\s+of)?(?:\s+[a-z-]+){0,3}?\s+experience", text)]
+    years += [float(m) for m in re.findall(r"experience(?:\s+of)?\s*:?\s*(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)", text)]
+    years = [y for y in years if 0 < y <= 45]
+    return int(max(years)) if years else None
+
+
+def detect_roles(resume_text: str, limit: int = 6) -> list[str]:
+    """Job titles mentioned in the resume, most recent-looking (earliest in the text) first."""
+    text = re.sub(r"\s+", " ", resume_text.lower())
+    found = sorted((m.start(), t) for t in ROLE_TITLES if (m := re.search(
+        rf"(?<![a-z0-9]){re.escape(t)}(?![a-z0-9])", text)))
+    titles = [t for _, t in found]
+    titles = [t for t in titles if not any(t != o and t in o for o in titles)]
+    return titles[:limit]
 
 
 def edit_list(current: list[str], text: str) -> list[str]:

@@ -14,7 +14,7 @@ import webapp
 from matcher import Matcher, wanted_job_types, wanted_work_modes
 from naukri import Job, extract_emails, search_url
 from options import GIG_TYPES, normalize_job_types, normalize_work_modes
-from skills import detect_skills, edit_list
+from skills import detect_experience, detect_roles, detect_skills, edit_list
 
 
 def make_job(**kw) -> Job:
@@ -60,6 +60,17 @@ def test_edit_list():
 def test_detect_skills():
     found = detect_skills("built microservices in python and react on aws with docker")
     assert {"python", "react", "aws", "docker", "microservices"} <= set(found)
+
+
+def test_detect_experience():
+    assert detect_experience("Engineering Manager with 12+ years of software experience") == 12
+    assert detect_experience("Total experience: 7.5 years") == 7
+    assert detect_experience("Managed a team for 3 years") is None
+
+
+def test_detect_roles():
+    text = "Senior Software Engineer at X. Previously Software Engineer and Technical Lead."
+    assert detect_roles(text) == ["senior software engineer", "technical lead"]
 
 
 # ---------------------------------------------------------------- search

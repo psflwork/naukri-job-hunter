@@ -34,8 +34,6 @@ main { max-width:1100px; margin:24px auto; padding:0 24px 160px; }
 .btn:disabled { opacity:.45; cursor:not-allowed; }
 .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
 .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:14px; margin:14px 0; }
-.fact { background:var(--bg); border-radius:10px; padding:12px 14px; }
-.fact b { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:4px; }
 .banner { background:var(--amber-soft); border:1px solid #f0dca0; border-radius:12px; padding:14px 18px; margin-bottom:18px; }
 .ok { color:var(--green); font-weight:600; }
 .err { color:var(--red); }
@@ -79,7 +77,6 @@ td a { color:var(--blue); text-decoration:none; font-weight:600; }
   <button data-view="search">1. Find jobs</button>
   <button data-view="matches">2. My matches</button>
   <button data-view="contacts">3. Recruiter contacts</button>
-  <button data-view="prefs">What I'm looking for</button>
   <button data-view="login">Naukri login</button>
 </nav>
 <main>
@@ -87,7 +84,6 @@ td a { color:var(--blue); text-decoration:none; font-weight:600; }
   <section id="view-search"></section>
   <section id="view-matches" class="hidden"></section>
   <section id="view-contacts" class="hidden"></section>
-  <section id="view-prefs" class="hidden"></section>
   <section id="view-login" class="hidden"></section>
 </main>
 <div id="task"></div>
@@ -97,7 +93,10 @@ td a { color:var(--blue); text-decoration:none; font-weight:600; }
 const HEADERS = { "X-Requested-With": "naukri-job-hunter" };
 let S = null;                                   // server state
 let profile = localStorage.getItem("profile") || "default";
-let view = localStorage.getItem("view") || "search";
+const VIEWS = ["search", "matches", "contacts", "login"];
+let view = VIEWS.includes(localStorage.getItem("view")) ? localStorage.getItem("view") : "search";
+const drafts = {};        // profile -> unsaved form values
+const suggested = {};     // profile -> job titles found in the resume
 let jobs = [];
 let contacts = null;
 let taskSeen = Number(sessionStorage.getItem("taskSeen") || 0);
@@ -105,8 +104,6 @@ let polling = null;
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const list = (a, empty = "any") => (a && a.length ? a.join(", ") : empty);
-
 async function get(path) {
   const r = await fetch(path, { cache: "no-store" });
   const data = await r.json();
@@ -150,9 +147,9 @@ function render() {
   $("hunts").innerHTML = S.profiles.map((p) =>
     `<button data-p="${esc(p.id)}" class="${p.id === profile ? "on" : ""}">${esc(huntName(p.id))}</button>`).join("");
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
-  for (const v of ["search", "matches", "contacts", "prefs", "login"]) $(`view-${v}`).classList.toggle("hidden", v !== view);
+  for (const v of VIEWS) $(`view-${v}`).classList.toggle("hidden", v !== view);
   renderSetup();
-  ({ search: renderSearch, matches: renderMatches, contacts: renderContacts, prefs: renderPrefs, login: renderLogin })[view]();
+  ({ search: renderSearch, matches: renderMatches, contacts: renderContacts, login: renderLogin })[view]();
   renderTask();
 }
 
@@ -164,48 +161,149 @@ function go(v) {
 }
 
 function renderSetup() {
-  const steps = [];
-  if (!P().resume.ok) steps.push(`Upload your resume and check your job titles and years of experience under
-    <a href="#" data-go="prefs">What I'm looking for</a>.`);
-  if (!S.has_login) steps.push(`Optional: save your Naukri login under <a href="#" data-go="login">Naukri login</a> so applying works without typing it each time.`);
-  $("setup").innerHTML = steps.length && view !== "prefs" && view !== "login"
-    ? `<div class="banner"><b>Getting started</b><ul style="margin:6px 0 0">${steps.map((s) => `<li>${s}</li>`).join("")}</ul></div>` : "";
+  $("setup").innerHTML = !P().resume.ok && view !== "search"
+    ? `<div class="banner"><b>Getting started:</b> upload your resume in <a href="#" data-go="search">1. Find jobs</a>.</div>` : "";
 }
 
 // ------------------------------------------------------------------ 1. Find jobs
+const fromPrefs = (pr) => ({
+  roles: pr.roles.join("\n"), locations: pr.locations.join(", "), work_modes: [...pr.work_modes],
+  job_types: [...pr.job_types], skills: pr.skills.join(", "), experience_years: String(pr.experience_years ?? ""),
+  only_new: true, limit: "",
+});
+const draft = () => (drafts[profile] ||= fromPrefs(P().prefs));
+const isDirty = () => {
+  const d = draft(), saved = fromPrefs(P().prefs);
+  return ["roles", "locations", "work_modes", "job_types", "skills", "experience_years"]
+    .some((k) => JSON.stringify(d[k]) !== JSON.stringify(saved[k]));
+};
+const splitText = (text, sep) => text.split(sep).map((s) => s.trim()).filter(Boolean);
+
+async function savePrefs() {
+  const d = draft();
+  const r = await post("/api/prefs", {
+    profile,
+    roles: splitText(d.roles, /\n|,/),
+    locations: splitText(d.locations, ","),
+    work_modes: d.work_modes,
+    job_types: d.job_types,
+    skills: splitText(d.skills, ","),
+    experience_years: d.experience_years,
+  });
+  const keep = { only_new: d.only_new, limit: d.limit };
+  for (const k of Object.keys(drafts)) delete drafts[k];   // skills/experience are shared by all hunts
+  P().prefs = r.prefs;
+  drafts[profile] = { ...fromPrefs(r.prefs), ...keep };
+}
+
+async function syncFromResume() {
+  const r = await post("/api/resume/sync", { profile });
+  const d = draft();
+  if (r.skills.length) d.skills = r.skills.join(", ");
+  if (r.experience_years) d.experience_years = String(r.experience_years);
+  suggested[profile] = r.roles;
+  render();
+  toast(`Filled ${r.skills.length} skills${r.experience_years ? ` and ${r.experience_years} years` : ""} from your resume. Review, then Save.`, 5000);
+}
+
 function renderSearch() {
-  const p = P(), pr = p.prefs;
+  const p = P(), d = draft();
+  const roles = splitText(d.roles, /\n|,/).map((r) => r.toLowerCase());
+  const tips = (suggested[profile] || []).filter((t) => !roles.includes(t));
+  const checks = (name, options) => options.map((o) =>
+    `<label><input type="checkbox" name="${name}" value="${o.id}" ${d[name].includes(o.id) ? "checked" : ""}> ${esc(o.label)}</label>`).join("");
   $("view-search").innerHTML = `
     <div class="card">
-      <h2>Find ${profile === "side" ? "side gigs (part-time / freelance / contract)" : "jobs"} that match my resume</h2>
-      <p class="muted">A Chrome window opens and searches Naukri by itself. Leave it open; it takes about 5-20 minutes.
-      Every job gets a match score out of 100.</p>
-      <div class="grid">
-        <div class="fact"><b>Resume</b>${esc(p.resume.ok ? p.resume.name : "not added yet")}</div>
-        <div class="fact"><b>Job titles</b>${esc(list(pr.roles))}</div>
-        <div class="fact"><b>Location</b>${esc(list(pr.locations, "anywhere"))}</div>
-        <div class="fact"><b>Work mode</b>${esc(list(pr.work_modes))}</div>
-        <div class="fact"><b>Job type</b>${esc(list(pr.job_types.map(labelType)))}</div>
-        <div class="fact"><b>Skills</b>${pr.skills.length} skills &middot; ${esc(pr.experience_years ?? "?")} years experience</div>
+      <h2>My resume</h2>
+      ${p.resume.ok
+        ? `<div class="row"><span>Using <b>${esc(p.resume.name)}</b></span>
+             <button class="btn ghost small" id="syncResume">Sync from resume</button>
+             <span class="muted">fills skills, experience and job-title ideas below</span></div>`
+        : `<p class="err" style="margin:0 0 8px">Upload your resume to get started.</p>`}
+      <div class="row" style="margin-top:12px">
+        <input type="file" id="resumeFile" accept="application/pdf,.pdf">
+        <button class="btn ${p.resume.ok ? "ghost small" : ""}" id="uploadResume">${p.resume.ok ? "Upload a different resume" : "Upload resume"}</button>
       </div>
-      <div class="row" style="margin-bottom:16px">
-        <a href="#" data-go="prefs">Change what I'm looking for</a>
+    </div>
+
+    <div class="card">
+      <h2>What I'm looking for: ${esc(huntName(profile))}</h2>
+      <p class="muted">Edit anything, then save or start searching. Skills and experience are shared by both searches.</p>
+
+      <label class="field">Job titles to search <small>(one per line)</small></label>
+      <textarea id="f-roles" data-k="roles">${esc(d.roles)}</textarea>
+      ${tips.length ? `<div class="row" style="margin-top:8px; gap:6px"><span class="muted">From your resume:</span>
+        ${tips.map((t) => `<button class="btn ghost small" data-add-role="${esc(t)}">+ ${esc(t)}</button>`).join("")}</div>` : ""}
+
+      <div class="grid" style="margin:0">
+        <div>
+          <label class="field">Location <small>(cities, comma-separated; empty = anywhere)</small></label>
+          <input type="text" id="f-locations" data-k="locations" value="${esc(d.locations)}" placeholder="e.g. Bengaluru, Pune">
+        </div>
+        <div>
+          <label class="field">Years of experience</label>
+          <input type="number" id="f-years" data-k="experience_years" min="0" max="60" value="${esc(d.experience_years)}">
+        </div>
       </div>
+
+      <label class="field">Work mode <small>(none ticked = any)</small></label>
+      <div class="checks">${checks("work_modes", S.work_modes)}</div>
+
+      <label class="field">Job type <small>(none ticked = any)</small></label>
+      <div class="checks">${checks("job_types", S.job_types)}</div>
+
+      <label class="field">My skills <small>(comma-separated; jobs mentioning them score higher)</small></label>
+      <textarea id="f-skills" data-k="skills">${esc(d.skills)}</textarea>
+    </div>
+
+    <div class="card">
+      <h2>Search</h2>
+      <p class="muted">A Chrome window opens and searches Naukri by itself. Leave it open; it takes about 5-20 minutes.</p>
       <div class="row">
-        <label class="row" style="gap:6px"><input type="checkbox" id="onlyNew" checked> Only jobs I haven't seen before</label>
-        <label class="row" style="gap:6px">Show at most <input type="number" id="limit" min="1" placeholder="all" style="width:80px"> jobs</label>
+        <label class="row" style="gap:6px"><input type="checkbox" id="f-onlyNew" ${d.only_new ? "checked" : ""}> Only jobs I haven't seen before</label>
+        <label class="row" style="gap:6px">Show at most <input type="number" id="f-limit" min="1" value="${esc(d.limit)}" placeholder="all" style="width:80px"> jobs</label>
       </div>
-      <p style="margin-top:20px"><button class="btn big" id="startSearch" ${busy() || !p.resume.ok ? "disabled" : ""}>Start searching</button></p>
-      ${!p.resume.ok ? `<p class="err">Add your resume first.</p>` : ""}
+      <div class="row" style="margin-top:20px">
+        <button class="btn big" id="startSearch" ${busy() || !p.resume.ok ? "disabled" : ""}>Save &amp; start searching</button>
+        <button class="btn ghost" id="savePrefs">Save only</button>
+        <span id="dirty" class="muted">${isDirty() ? "Unsaved changes" : ""}</span>
+      </div>
+      ${busy() ? `<p class="muted">Another task is running; wait for it to finish.</p>` : ""}
+      ${!S.has_login ? `<p class="muted">Tip: save your Naukri login under <a href="#" data-go="login">Naukri login</a> so applying later works without typing it.</p>` : ""}
     </div>`;
+
+  const markDirty = () => ($("dirty").textContent = isDirty() ? "Unsaved changes" : "");
+  document.querySelectorAll("#view-search [data-k]").forEach((el) =>
+    el.addEventListener("input", () => { d[el.dataset.k] = el.value; markDirty(); }));
+  document.querySelectorAll("#view-search input[name=work_modes], #view-search input[name=job_types]").forEach((el) =>
+    el.addEventListener("change", () => {
+      d[el.name] = [...document.querySelectorAll(`#view-search input[name=${el.name}]:checked`)].map((c) => c.value);
+      markDirty();
+    }));
+  $("f-onlyNew").onchange = (e) => (d.only_new = e.target.checked);
+  $("f-limit").oninput = (e) => (d.limit = e.target.value);
+  document.querySelectorAll("[data-add-role]").forEach((b) => (b.onclick = () => {
+    d.roles = (d.roles.trim() ? d.roles.trim() + "\n" : "") + b.dataset.addRole;
+    render();
+  }));
+
+  if ($("syncResume")) $("syncResume").onclick = () => run(syncFromResume);
+  $("uploadResume").onclick = () => run(async () => {
+    const f = $("resumeFile").files[0];
+    if (!f) throw new Error("Choose your resume PDF first.");
+    await post(`/api/resume?name=${encodeURIComponent(f.name)}&update_skills=0`, f, true);
+    await refresh();
+    await syncFromResume();
+  });
+  $("savePrefs").onclick = () => run(async () => { await savePrefs(); toast("Saved."); render(); });
   $("startSearch").onclick = () => run(async () => {
-    await post("/api/search", { profile, include_seen: !$("onlyNew").checked, limit: $("limit").value || null });
+    await savePrefs();
+    const d2 = draft();
+    await post("/api/search", { profile, include_seen: !d2.only_new, limit: d2.limit || null });
     toast("Search started. A Chrome window will open.");
     await refresh();
   });
 }
-const labelType = (t) => (S.job_types.find((x) => x.id === t) || { label: t }).label;
-
 // ------------------------------------------------------------------ 2. My matches
 function renderMatches() {
   const el = $("view-matches");
@@ -294,77 +392,6 @@ function renderContacts() {
       </table></div></div>` : ""}`;
   $("getContacts").onclick = () => run(async () => {
     await post("/api/contacts", { profile, top: Number($("topN").value) || 15 });
-    await refresh();
-  });
-}
-
-// ------------------------------------------------------------------ Preferences
-function renderPrefs() {
-  const p = P(), pr = p.prefs;
-  const checks = (name, options, chosen) => options.map((o) =>
-    `<label><input type="checkbox" name="${name}" value="${o.id}" ${chosen.includes(o.id) ? "checked" : ""}> ${esc(o.label)}</label>`).join("");
-  $("view-prefs").innerHTML = `
-    <div class="card">
-      <h2>My resume</h2>
-      <p class="muted">Current: <b>${esc(p.resume.ok ? p.resume.name : "none yet")}</b>. Used for both searches.</p>
-      <div class="row">
-        <input type="file" id="resumeFile" accept="application/pdf,.pdf">
-        <label class="row" style="gap:6px"><input type="checkbox" id="resumeSkills" checked> Also update my skills from this resume</label>
-        <button class="btn" id="uploadResume">Upload resume</button>
-      </div>
-    </div>
-    <div class="card">
-      <h2>What I'm looking for: ${esc(huntName(profile))}</h2>
-      <p class="muted">Job titles, location, work mode and job type are separate for each search (switch at the top).
-        Skills and experience are shared.</p>
-
-      <label class="field">Job titles to search <small>(one per line)</small></label>
-      <textarea id="roles">${esc(pr.roles.join("\n"))}</textarea>
-
-      <label class="field">Location <small>(cities separated by commas; leave empty for anywhere)</small></label>
-      <input type="text" id="locations" value="${esc(pr.locations.join(", "))}" placeholder="e.g. Bengaluru, Pune">
-
-      <label class="field">Work mode <small>(none ticked = any)</small></label>
-      <div class="checks">${checks("work_modes", S.work_modes, pr.work_modes)}</div>
-
-      <label class="field">Job type <small>(none ticked = any)</small></label>
-      <div class="checks">${checks("job_types", S.job_types, pr.job_types)}</div>
-
-      <label class="field">My skills <small>(separated by commas; jobs mentioning them score higher)</small></label>
-      <textarea id="skills">${esc(pr.skills.join(", "))}</textarea>
-      <p><button class="btn ghost small" id="detectSkills">Find skills in my resume</button></p>
-
-      <label class="field">Years of experience</label>
-      <input type="number" id="years" min="0" max="60" value="${esc(pr.experience_years ?? "")}" style="max-width:140px">
-
-      <p style="margin-top:22px"><button class="btn big" id="savePrefs">Save</button></p>
-    </div>`;
-  const ticked = (name) => [...document.querySelectorAll(`input[name=${name}]:checked`)].map((c) => c.value);
-  const split = (text, sep) => text.split(sep).map((s) => s.trim()).filter(Boolean);
-  $("savePrefs").onclick = () => run(async () => {
-    await post("/api/prefs", {
-      profile,
-      roles: split($("roles").value, /\n|,/),
-      locations: split($("locations").value, ","),
-      work_modes: ticked("work_modes"),
-      job_types: ticked("job_types"),
-      skills: split($("skills").value, ","),
-      experience_years: $("years").value,
-    });
-    toast("Saved.");
-    await refresh();
-  });
-  $("detectSkills").onclick = () => run(async () => {
-    const r = await post("/api/skills/detect", { profile });
-    toast(`Found ${r.skills.length} skills in your resume.`);
-    await refresh();
-  });
-  $("uploadResume").onclick = () => run(async () => {
-    const f = $("resumeFile").files[0];
-    if (!f) throw new Error("Choose your resume PDF first.");
-    const q = `name=${encodeURIComponent(f.name)}&update_skills=${$("resumeSkills").checked ? 1 : 0}`;
-    const r = await post(`/api/resume?${q}`, f, true);
-    toast(`Resume saved. Found ${r.detected.length} skills.`);
     await refresh();
   });
 }

@@ -18,9 +18,9 @@ No coding needed.
    Documents). With git: `git clone https://github.com/psflwork/naukri-job-hunter.git`
 3. **Start it** (see [Run](#run) below). The first start takes 2-5 minutes while it installs what it
    needs.
-4. In the browser, open **What I'm looking for**:
-   - upload your resume (PDF); skills are picked up from it,
-   - check job titles, location, work mode, job type and experience, then click **Save**.
+4. In the browser, on **1. Find jobs**:
+   - upload your resume (PDF); skills, experience and job-title ideas are filled in from it,
+   - check job titles, location, work mode, job type and experience, then click **Save only**.
 5. Optional: under **Naukri login**, save your email and password, then click **Open Chrome and sign
    in**. Complete any OTP or captcha in that Chrome window.
 
@@ -48,10 +48,9 @@ you use it. To stop, click **Stop app** or close that window.
 
 | Tab | What it does |
 |---|---|
-| **1. Find jobs** | Searches Naukri in a Chrome window (5-20 minutes; don't close it) |
+| **1. Find jobs** | Edit resume, job titles, location, work mode, job type, skills and experience (pre-filled; **Sync from resume** refills them), then **Save & start searching**. Chrome searches Naukri for 5-20 minutes; don't close it |
 | **2. My matches** | Ranked matches. Tick the ones you like and click **Apply to ticked jobs** |
 | **3. Recruiter contacts** | Published recruiter emails and phones, with a **Draft email** button |
-| **What I'm looking for** | Resume, job titles, skills, location, work mode, job type, experience |
 | **Naukri login** | Save your login (optional) or sign in now |
 
 Switch between **Regular jobs** and **Side gigs** at the top.
@@ -62,7 +61,7 @@ Switch between **Regular jobs** and **Side gigs** at the top.
 - **Is my password safe?** It's saved only on your computer and used only to sign in to Naukri.
 - **Will it apply without asking?** No. It applies only to jobs you tick.
 - **OTP or captcha?** Complete it in the Chrome window; you stay signed in afterwards.
-- **No jobs found?** Add more job titles, clear the location, or untick work modes.
+- **No jobs found?** In **1. Find jobs**, add more job titles, clear the location, or untick work modes.
 - **Page says it can't connect?** The app was stopped; start it again.
 - **"Python 3.10 or newer is needed"?** Install Python (step 1), then start again.
 - **`Permission denied` on Mac?** Run `chmod +x run.sh START-HERE-Mac.command` in the folder.
