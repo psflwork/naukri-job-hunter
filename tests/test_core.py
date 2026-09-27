@@ -8,6 +8,7 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
+import answers
 import hunt
 import preferences
 import webapp
@@ -131,6 +132,43 @@ def test_preferences_overlay(tmp_path, monkeypatch):
 
 def test_clean_path_strips_quotes(tmp_path):
     assert preferences.clean_path(f"'{tmp_path}'") == tmp_path.resolve()
+
+
+# ---------------------------------------------------------------- recruiter questions
+
+@pytest.fixture
+def answerer(tmp_path, monkeypatch):
+    monkeypatch.setattr(answers, "ANSWERS_FILE", tmp_path / "answers.json")
+    answers.update({"notice_period": "30 days", "current_ctc": "25", "expected_ctc": "32",
+                    "willing_to_relocate": "Yes", "skill_years": {"react": "6"}})
+    return answers.Answerer(12, ["python", "react", "aws"], "python react aws resume")
+
+
+def test_answers_from_profile(answerer):
+    assert answerer.answer("What is your notice period?") == "30 days"
+    assert answerer.answer("Notice period", ["Immediate", "15 days or less", "1 month", "2 months"]) == "1 month"
+    assert answerer.answer("Notice period (in days)?", ["0-15", "16-30", "31-60"]) == "16-30"
+    assert answerer.answer("Current CTC (in lakhs)?") == "25"
+    assert answerer.answer("What is your expected CTC?") == "32"
+    assert answerer.answer("Are you willing to relocate to Pune?", ["Yes", "No"]) == "Yes"
+
+
+def test_answers_experience(answerer):
+    assert answerer.answer("How many years of total experience do you have?") == "12"
+    assert answerer.answer("How many years of experience do you have in Python?") == "12"
+    assert answerer.answer("Years of experience in React?", ["0-2", "3-5", "6-8", "9+"]) == "6-8"
+    assert answerer.answer("How many years of experience do you have in Golang?") is None
+    assert answerer.answer("Do you have hands-on experience with AWS?", ["Yes", "No"]) == "Yes"
+    assert answerer.answer("Are you comfortable working in rotational shifts?", ["Yes", "No"]) == "Yes"
+
+
+def test_unknown_questions_become_pending(answerer):
+    assert answerer.answer("What is your date of birth?") is None
+    answerer.record_pending("What is your date of birth?", [], "Dev", "Acme")
+    assert [p["question"] for p in answers.load()["pending"]] == ["What is your date of birth?"]
+    answers.update(saved={"What is your date of birth?": "01/01/1990"})
+    assert answers.load()["pending"] == []
+    assert answers.Answerer(12, [], "").answer("what is your date of birth") == "01/01/1990"
 
 
 # ---------------------------------------------------------------- web app

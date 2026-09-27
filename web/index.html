@@ -77,6 +77,7 @@ td a { color:var(--blue); text-decoration:none; font-weight:600; }
   <button data-view="search">1. Find jobs</button>
   <button data-view="matches">2. My matches</button>
   <button data-view="contacts">3. Recruiter contacts</button>
+  <button data-view="answers">Recruiter questions</button>
   <button data-view="login">Naukri login</button>
 </nav>
 <main>
@@ -84,6 +85,7 @@ td a { color:var(--blue); text-decoration:none; font-weight:600; }
   <section id="view-search"></section>
   <section id="view-matches" class="hidden"></section>
   <section id="view-contacts" class="hidden"></section>
+  <section id="view-answers" class="hidden"></section>
   <section id="view-login" class="hidden"></section>
 </main>
 <div id="task"></div>
@@ -93,7 +95,8 @@ td a { color:var(--blue); text-decoration:none; font-weight:600; }
 const HEADERS = { "X-Requested-With": "naukri-job-hunter" };
 let S = null;                                   // server state
 let profile = localStorage.getItem("profile") || "default";
-const VIEWS = ["search", "matches", "contacts", "login"];
+const VIEWS = ["search", "matches", "contacts", "answers", "login"];
+let A = null;             // recruiter-question answers
 let view = VIEWS.includes(localStorage.getItem("view")) ? localStorage.getItem("view") : "search";
 const drafts = {};        // profile -> unsaved form values
 const suggested = {};     // profile -> job titles found in the resume
@@ -139,6 +142,7 @@ async function refresh() {
   S = await get("/api/state");
   if (!S.profiles.some((p) => p.id === profile)) profile = "default";
   try { jobs = (await get(`/api/jobs?profile=${profile}`)).jobs; } catch { jobs = []; }
+  A = await get("/api/answers");
   render();
   if (S.task.running) watchTask();
 }
@@ -147,9 +151,11 @@ function render() {
   $("hunts").innerHTML = S.profiles.map((p) =>
     `<button data-p="${esc(p.id)}" class="${p.id === profile ? "on" : ""}">${esc(huntName(p.id))}</button>`).join("");
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+  document.querySelector('#tabs [data-view="answers"]').innerHTML =
+    `Recruiter questions${A.pending.length ? ` <span class="pill auto">${A.pending.length}</span>` : ""}`;
   for (const v of VIEWS) $(`view-${v}`).classList.toggle("hidden", v !== view);
   renderSetup();
-  ({ search: renderSearch, matches: renderMatches, contacts: renderContacts, login: renderLogin })[view]();
+  ({ search: renderSearch, matches: renderMatches, contacts: renderContacts, answers: renderAnswers, login: renderLogin })[view]();
   renderTask();
 }
 
@@ -318,10 +324,13 @@ function renderMatches() {
     <div class="card">
       <h2>${jobs.length} matches for ${esc(huntName(profile))}</h2>
       <p><b>${autoCount}</b> of ${open.length} open jobs can be applied automatically.
-        ${autoCount < open.length ? `The rest apply on the company's website or ask recruiter questions; those open in your browser for you to finish.` : ""}</p>
+        ${autoCount < open.length ? `The rest apply on the company's website; those open in your browser for you to finish.` : ""}</p>
+      ${!A.profile.notice_period || !A.profile.expected_ctc ? `<div class="banner">Many jobs ask recruiter questions
+        (notice period, salary...). Fill in <a href="#" data-go="answers">Recruiter questions</a> first so they can be
+        answered for you.</div>` : ""}
       <p class="muted">Tick the jobs you like, then press <b>Apply to ticked jobs</b>. Jobs marked
-        <span class="pill auto">Naukri (auto)</span> are applied for you; the others open in your browser so you can
-        finish on the company's site. Nothing is applied without your click.</p>
+        <span class="pill auto">Naukri (auto)</span> are applied for you, answering recruiter questions from your
+        resume and saved answers. Company-site jobs open in your browser. Nothing is applied without your click.</p>
       <div class="row" style="margin:12px 0">
         <button class="btn ghost small" id="tickAuto">Tick all auto-apply jobs</button>
         <button class="btn ghost small" id="tickNone">Untick all</button>
@@ -399,6 +408,83 @@ function renderContacts() {
   });
 }
 
+// ------------------------------------------------------------------ Recruiter questions
+function renderAnswers() {
+  const d = A.profile, saved = Object.entries(A.saved);
+  const skillYears = Object.entries(d.skill_years || {}).map(([k, v]) => `${k} = ${v}`).join("\n");
+  const answerInput = (p, i) => p.options.length
+    ? `<div class="checks">${p.options.map((o) =>
+        `<label><input type="radio" name="pq-${i}" value="${esc(o)}"> ${esc(o)}</label>`).join("")}</div>`
+    : `<input type="text" id="pq-${i}" placeholder="Your answer">`;
+  $("view-answers").innerHTML = `
+    <div class="card">
+      <h2>My details for recruiter questions</h2>
+      <p class="muted">Many Naukri jobs ask questions when you apply (notice period, salary, years with a skill...).
+        These answers, your resume and your years of experience are used to answer them for you. Nothing is made
+        up: if a question can't be answered from this, the job is left for you and the question shows up below.</p>
+      <div class="grid">
+        ${Object.entries(A.fields).map(([k, label]) => `<div>
+          <label class="field">${esc(label)}</label>
+          <input type="text" data-detail="${k}" value="${esc(d[k] || "")}">
+        </div>`).join("")}
+      </div>
+      <label class="field">Years per skill <small>(optional; one per line, e.g. <code>python = 8</code>. Other skills in
+        your resume use your total experience: ${esc(P().prefs.experience_years ?? "?")} years)</small></label>
+      <textarea id="skillYears" placeholder="python = 8&#10;react = 6">${esc(skillYears)}</textarea>
+      <p style="margin-top:16px"><button class="btn" id="saveDetails">Save details</button></p>
+    </div>
+
+    <div class="card">
+      <h2>Questions waiting for your answer (${A.pending.length})</h2>
+      ${A.pending.length ? `<p class="muted">Recruiters asked these and they couldn't be answered automatically. Answer
+        once; the answer is reused for every job that asks the same question.</p>
+        ${A.pending.map((p, i) => `<div style="border-top:1px solid var(--line); padding:12px 0">
+          <b>${esc(p.question)}</b><div class="muted">${esc(p.job)} @ ${esc(p.company)}</div>
+          <div style="margin-top:8px">${answerInput(p, i)}</div></div>`).join("")}
+        <p><button class="btn" id="savePending">Save answers</button></p>`
+      : `<p class="muted">None right now.</p>`}
+    </div>
+
+    <div class="card">
+      <h2>My saved answers (${saved.length})</h2>
+      ${saved.length ? `<div class="table-wrap"><table>
+        <tr><th>Question</th><th>Answer</th><th></th></tr>
+        ${saved.map(([q, a], i) => `<tr><td>${esc(q)}</td><td>${esc(a)}</td>
+          <td><button class="btn small danger" data-remove="${i}">Remove</button></td></tr>`).join("")}
+      </table></div>` : `<p class="muted">Answers you give above are listed here.</p>`}
+    </div>`;
+
+  $("saveDetails").onclick = () => run(async () => {
+    const details = {};
+    document.querySelectorAll("[data-detail]").forEach((el) => (details[el.dataset.detail] = el.value));
+    details.skill_years = {};
+    for (const line of $("skillYears").value.split("\n")) {
+      const [skill, years] = line.split(/[=:]/).map((s) => (s || "").trim());
+      if (skill && years) details.skill_years[skill] = years;
+    }
+    A = await post("/api/answers", { details });
+    toast("Details saved.");
+    render();
+  });
+  if ($("savePending")) $("savePending").onclick = () => run(async () => {
+    const answers = {};
+    A.pending.forEach((p, i) => {
+      const value = p.options.length
+        ? (document.querySelector(`input[name="pq-${i}"]:checked`) || {}).value
+        : $(`pq-${i}`).value.trim();
+      if (value) answers[p.question] = value;
+    });
+    if (!Object.keys(answers).length) throw new Error("Answer at least one question first.");
+    A = await post("/api/answers", { saved: answers });
+    toast(`Saved ${Object.keys(answers).length} answer(s).`);
+    render();
+  });
+  document.querySelectorAll("[data-remove]").forEach((b) => (b.onclick = () => run(async () => {
+    A = await post("/api/answers", { remove: [saved[Number(b.dataset.remove)][0]] });
+    render();
+  })));
+}
+
 // ------------------------------------------------------------------ Login
 function renderLogin() {
   $("view-login").innerHTML = `
@@ -462,6 +548,7 @@ function resultText(r) {
     const parts = [];
     if (r.results.length || !r.manual.length) parts.push(`Applied to <b>${r.applied}</b> job(s) on Naukri.`);
     if (r.manual.length) parts.push(`<b>${r.manual.length}</b> need you to finish them yourself; ${r.opened} opened in new browser tabs.`);
+    if (A && A.pending.length) parts.push(`<a href="#" data-go="answers">Answer ${A.pending.length} recruiter question(s)</a> so next time they're answered for you.`);
     return parts.join(" ");
   }
   return "";

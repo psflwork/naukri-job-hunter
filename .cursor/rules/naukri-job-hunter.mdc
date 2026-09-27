@@ -36,7 +36,8 @@ If a tool fails because `config.yaml` is missing, tell the user to run `./run.sh
 ## Applying — strict rules
 
 - Never call `apply_to_job` with `confirm=True` unless the user named those specific jobs in this chat.
-- `needs_manual` jobs (company site / questionnaire): give the link and suggested answers instead.
+- Recruiter questions are answered from the resume and `data/answers.json`; unanswered ones are saved
+  as pending there. `needs_manual` jobs (company site / unanswered question): give the link and suggested answers.
 - Report each apply result; on `not_logged_in` call `login` (uses `.env` credentials), and if that
   fails ask the user to complete OTP/captcha in the Chrome window.
 - Never read, print or echo the contents of `.env`.

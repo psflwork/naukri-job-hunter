@@ -51,6 +51,7 @@ you use it. To stop, click **Stop app** or close that window.
 | **1. Find jobs** | Edit resume, job titles, location, work mode, job type, skills and experience (pre-filled; **Sync from resume** refills them), then **Save & start searching**. Chrome searches Naukri for 5-20 minutes; don't close it |
 | **2. My matches** | Ranked matches. Tick the ones you like and click **Apply to ticked jobs** |
 | **3. Recruiter contacts** | Published recruiter emails and phones, with a **Draft email** button |
+| **Recruiter questions** | Notice period, CTC, location, and so on. Used to answer the questions some jobs ask when you apply. Questions it couldn't answer appear here for you to fill in once |
 | **Naukri login** | Save your login (optional) or sign in now |
 
 Switch between **Regular jobs** and **Side gigs** at the top.

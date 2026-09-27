@@ -35,12 +35,13 @@ from pathlib import Path
 
 import yaml
 
+from answers import Answerer
 from matcher import Matcher, find_resume, read_resume, wanted_job_types, wanted_work_modes
 from naukri import Job, Naukri, credentials
 from options import GIG_TYPES, JOB_TYPE_LABELS, JOB_TYPE_QUERY_PREFIX, describe
 from preferences import apply_overrides, apply_saved, edit_preferences, summary, use_resume
 from setup_wizard import run_setup
-from skills import edit_list
+from skills import detect_skills, edit_list
 
 ROOT = Path(__file__).parent
 DATA = ROOT / "data"
@@ -270,7 +271,7 @@ def apply_candidates(cfg: dict, top: int) -> list[Job]:
             continue
         if j.external_apply:
             print(f"  skip (company site)  {j.title} @ {j.company}")
-        elif j.has_questionnaire and ac.get("skip_questionnaires", True):
+        elif not can_auto_apply(cfg, j):
             print(f"  skip (questionnaire) {j.title} @ {j.company}")
         else:
             candidates.append(j)
@@ -283,15 +284,25 @@ def print_candidates(jobs: list[Job]) -> None:
         print(f"  {j.score:3d}  {j.title} @ {j.company}\n       {j.url}")
 
 
-def apply_jobs(jobs: list[Job]) -> list[tuple[Job, str]]:
+def make_answerer(cfg: dict) -> Answerer | None:
+    """Answers recruiter questions from the resume, experience and saved answers (None if disabled)."""
+    if not answers_questions(cfg):
+        return None
+    resume = read_resume(find_resume(ROOT, cfg.get("resume_path")))
+    skills = list(cfg.get("skills", [])) + detect_skills(resume)
+    return Answerer(cfg.get("experience_years"), skills, resume)
+
+
+def apply_jobs(jobs: list[Job], cfg: dict) -> list[tuple[Job, str]]:
     results = []
+    answerer = make_answerer(cfg)
     print("Opening Chrome and checking your Naukri login...")
     with Naukri(headless=False) as n:
         if not (n.ensure_logged_in() or n.login()):
             raise SystemExit("Not logged in. Set NAUKRI_EMAIL/NAUKRI_PASSWORD in .env or run: ./run.sh login")
         for i, j in enumerate(jobs, 1):
             print(f"[{i}/{len(jobs)}] Applying: {j.title} @ {j.company}")
-            status = n.apply(j)
+            status = n.apply(j, answerer)
             print(f"  {status:16s} {j.title} @ {j.company}")
             if status in ("applied", "already_applied"):
                 record_applied(j, status)
@@ -306,12 +317,15 @@ def cmd_apply(cfg: dict, args) -> None:
         print_candidates(candidates)
         print("\nDry run. Re-run with --confirm to apply.")
         return
-    apply_jobs(candidates)
+    apply_jobs(candidates, cfg)
+
+
+def answers_questions(cfg: dict) -> bool:
+    return cfg.get("apply", {}).get("answer_questions", True)
 
 
 def can_auto_apply(cfg: dict, job: Job) -> bool:
-    skip_q = cfg.get("apply", {}).get("skip_questionnaires", True)
-    return not job.external_apply and not (job.has_questionnaire and skip_q)
+    return not job.external_apply and (not job.has_questionnaire or answers_questions(cfg))
 
 
 def parse_selection(text: str, count: int) -> list[int]:
@@ -354,7 +368,7 @@ def cmd_pick(cfg: dict, args) -> None:
     manual = [j for j in chosen if not can_auto_apply(cfg, j)]
     if auto:
         print(f"\nAuto-applying to {len(auto)} jobs...")
-        apply_jobs(auto)
+        apply_jobs(auto, cfg)
     if manual:
         print(f"\nOpening {len(manual)} jobs that need company-site or questionnaire answers in your browser:")
         for j in manual:
@@ -400,7 +414,7 @@ What next?
         if choice == "a":
             if eligible:
                 print_candidates(eligible)
-                apply_jobs(eligible)
+                apply_jobs(eligible, cfg)
             else:
                 print("No jobs eligible for auto-apply.")
         elif choice == "p":
@@ -421,7 +435,7 @@ def cmd_run(cfg: dict, args) -> None:
     if args.apply:
         candidates = apply_candidates(cfg, args.top)
         print_candidates(candidates)
-        apply_jobs(candidates)
+        apply_jobs(candidates, cfg)
         return
     post_search_menu(cfg, args)
 

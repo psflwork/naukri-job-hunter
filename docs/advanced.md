@@ -150,7 +150,8 @@ preferences override them.
 | `min_skill_matches` / `skip_if_max_experience_below` | Drop weak-skill / junior jobs |
 | `job_type_keywords` / `job_type_title_keywords` / `gig_ignore_phrases` | Job-type detection phrases |
 | `weights` / `min_score` / `max_results` | Scoring, threshold, jobs per run |
-| `apply.max_per_run` / `max_per_day` / `skip_questionnaires` | Auto-apply caps |
+| `apply.max_per_run` / `max_per_day` | Auto-apply caps |
+| `apply.answer_questions` | Answer recruiter questions from your resume, experience and saved answers (`data/answers.json`, edited in the web app's **Recruiter questions** tab); `false` = leave those jobs to you |
 | `outreach.name` / `subject` / `body` | Email template for "Draft email" links |
 
 ## Troubleshooting

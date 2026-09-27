@@ -109,7 +109,7 @@ max_results:
 apply:
   max_per_run: 10          # hard cap on auto-applies per CLI run
   max_per_day: 15          # hard cap on auto-applies per day via the MCP agent
-  skip_questionnaires: true  # jobs with recruiter questions are left for you to apply manually
+  answer_questions: true   # answer recruiter questions from your resume + saved answers (false = leave those jobs to you)
 
 # Email template for `./run.sh contacts` ("Draft email" links).
 # Placeholders: {title} {company} {job_url} {name} {experience_years}

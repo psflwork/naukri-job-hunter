@@ -276,8 +276,120 @@ class Naukri:
             "recruitment_agency": bool(jd.get("consultant")),
         }
 
-    def apply(self, job: Job) -> str:
-        """Returns one of: applied, already_applied, external, needs_manual, failed."""
+    # Naukri's recruiter questions open in a chat-style drawer after clicking Apply.
+    CHATBOT = ("[class*='chatbot_Drawer'], [class*='chatbot_drawer'], [class*='chatbotDrawer'], "
+               "[class*='chatbot_Wrapper'], [class*='chatbot']")
+    BOT_MESSAGE = "[class*='botMsg'], [class*='bot-msg'], [class*='botItem'], li[class*='bot']"
+    TEXT_INPUT = ("[contenteditable='true'], textarea, input[type='text'], input[type='number'], "
+                  "input[type='tel'], input:not([type])")
+    SEND_BUTTON = ("[class*='sendMsg'], [class*='send-msg'], [class*='sendBtn'], button:has-text('Save'), "
+                   "button:has-text('Submit'), button:has-text('Next'), div:text-is('Save')")
+
+    def _applied_confirmation(self) -> bool:
+        page = self.page
+        body = page.locator("body").inner_text().lower()
+        return ("successfully applied" in body or "you have successfully" in body or
+                page.get_by_role("button", name=re.compile(r"^\s*applied\s*$", re.I)).count() > 0)
+
+    def _drawer(self):
+        """Outermost chatbot element that holds the questions (chips and inputs also have 'chatbot' classes)."""
+        with_messages = self.page.locator(self.CHATBOT).filter(has=self.page.locator(self.BOT_MESSAGE))
+        return with_messages.first if with_messages.count() else self.page.locator(self.CHATBOT).first
+
+    def _last_question(self, drawer) -> str:
+        messages = drawer.locator(self.BOT_MESSAGE)
+        if messages.count():
+            return messages.last.inner_text().strip()
+        lines = [ln.strip() for ln in drawer.inner_text().splitlines() if ln.strip()]
+        questions = [ln for ln in lines if ln.endswith("?")]
+        return questions[-1] if questions else (lines[-1] if lines else "")
+
+    def _options(self, drawer) -> list[tuple[str, object]]:
+        """Clickable answers in the drawer: radio buttons, checkboxes or chips, as (label, locator)."""
+        options = []
+        for kind in ("radio", "checkbox"):
+            inputs = drawer.locator(f"input[type='{kind}']")
+            for i in range(inputs.count()):
+                item = inputs.nth(i)
+                input_id = item.get_attribute("id")
+                label = drawer.locator(f"label[for='{input_id}']") if input_id else None
+                text = label.first.inner_text().strip() if label is not None and label.count() else \
+                    (item.get_attribute("value") or "").strip()
+                if text:
+                    options.append((text, label.first if label is not None and label.count() else item))
+            if options:
+                return options
+        chips = drawer.locator("[class*='chip'], [class*='Chip']")
+        for i in range(chips.count()):
+            text = chips.nth(i).inner_text().strip()
+            if text and len(text) < 80:
+                options.append((text, chips.nth(i)))
+        return options
+
+    def _save_debug(self, job: Job, reason: str) -> None:
+        folder = PROFILE_DIR.parent / "questionnaire_debug"
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            (folder / f"{job.job_id}.html").write_text(self.page.content())
+            self.page.screenshot(path=str(folder / f"{job.job_id}.png"))
+            log(f"    ({reason}; saved {folder.name}/{job.job_id}.png for troubleshooting)")
+        except Exception:
+            pass
+
+    def _answer_questionnaire(self, job: Job, answerer) -> str:
+        page = self.page
+        last_question, repeats = "", 0
+        for _ in range(20):
+            page.wait_for_timeout(1500)
+            if self._applied_confirmation():
+                return "applied"
+            drawer = self._drawer()
+            if not drawer.count() or not drawer.is_visible():
+                page.wait_for_timeout(2000)
+                return "applied" if self._applied_confirmation() else "needs_manual"
+            question = self._last_question(drawer)
+            if question == last_question:
+                repeats += 1
+                if repeats >= 2:
+                    self._save_debug(job, "stuck on a question")
+                    return "needs_manual"
+                continue
+            repeats = 0
+            options = self._options(drawer)
+            labels = [text for text, _ in options]
+            answer = answerer.answer(question, labels)
+            log(f"    Q: {question}" + (f"  [{' / '.join(labels)}]" if labels else ""))
+            if answer is None:
+                log("    A: (no answer from your resume/answers; added to 'Recruiter questions' in the app)")
+                answerer.record_pending(question, labels, job.title, job.company)
+                return "needs_manual"
+            log(f"    A: {answer}")
+            if options:
+                next(loc for text, loc in options if text == answer).click()
+            else:
+                box = drawer.locator(self.TEXT_INPUT).last
+                if not box.count():
+                    self._save_debug(job, "no answer box found")
+                    return "needs_manual"
+                box.click()
+                if box.get_attribute("contenteditable") == "true":
+                    page.keyboard.type(answer)
+                else:
+                    box.fill(answer)
+            page.wait_for_timeout(500)
+            send = drawer.locator(self.SEND_BUTTON)
+            if send.count():
+                send.last.click()
+            elif not options:
+                page.keyboard.press("Enter")
+            last_question = question
+        return "needs_manual"
+
+    def apply(self, job: Job, answerer=None) -> str:
+        """Returns one of: applied, already_applied, external, needs_manual, failed.
+
+        With an answerer, recruiter questions are answered from your resume and saved answers.
+        """
         if job.external_apply:
             return "external"
         page = self.page
@@ -300,8 +412,10 @@ class Naukri:
         btn.first.click()
         page.wait_for_timeout(4000)
 
-        if page.locator("[class*='chatbot'], [class*='Chatbot']").count():
-            return "needs_manual"
+        if page.locator(self.CHATBOT).count() or page.locator("[class*='Chatbot']").count():
+            if answerer is None:
+                return "needs_manual"
+            return self._answer_questionnaire(job, answerer)
         body = page.locator("body").inner_text().lower()
         if "successfully applied" in body or "applied to" in body or page.get_by_role(
             "button", name=re.compile(r"^\s*applied\s*$", re.I)

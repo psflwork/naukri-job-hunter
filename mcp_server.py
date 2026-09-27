@@ -7,8 +7,8 @@ from datetime import date
 import anyio
 from mcp.server.mcpserver import MCPServer
 
-from hunt import (APPLIED_FILE, DEFAULT_PROFILE, ROOT, latest_file, list_profiles, load_config, load_json,
-                  record_applied, run_search)
+from hunt import (APPLIED_FILE, DEFAULT_PROFILE, ROOT, can_auto_apply, latest_file, list_profiles, load_config,
+                  load_json, make_answerer, record_applied, run_search)
 from matcher import find_resume, read_resume
 from naukri import Job, Naukri, credentials
 from preferences import apply_overrides, set_pref, summary, use_resume
@@ -237,7 +237,8 @@ async def apply_to_job(job_id: str, confirm: bool = False) -> dict:
 
     Only call with confirm=True after the user explicitly approved this specific job.
     With confirm=False it only reports whether the job can be auto-applied.
-    Company-site jobs and jobs with recruiter questionnaires return needs_manual with the URL.
+    Company-site jobs return needs_manual with the URL. Recruiter questions are answered from the resume
+    and saved answers; unanswerable ones return needs_manual and are saved as pending questions.
     """
     cfg = load_config()
     job = _find_job(job_id)
@@ -251,7 +252,7 @@ async def apply_to_job(job_id: str, confirm: bool = False) -> dict:
     base = {"job_id": job_id, "title": job.title, "company": job.company, "url": job.url}
     if job.external_apply:
         return {**base, "status": "needs_manual", "reason": "applies on company website"}
-    if job.has_questionnaire and ac.get("skip_questionnaires", True):
+    if not can_auto_apply(cfg, job):
         return {**base, "status": "needs_manual", "reason": "recruiter questionnaire required"}
 
     today = date.today().isoformat()
@@ -261,10 +262,12 @@ async def apply_to_job(job_id: str, confirm: bool = False) -> dict:
     if not confirm:
         return {**base, "status": "ready", "reason": "call again with confirm=True to apply"}
 
+    answerer = make_answerer(cfg)
+
     def do_apply(n: Naukri):
         if not n.ensure_logged_in():
             return "not_logged_in"
-        return n.apply(job)
+        return n.apply(job, answerer)
 
     status = await _in_browser(do_apply)
     if status in ("applied", "already_applied"):

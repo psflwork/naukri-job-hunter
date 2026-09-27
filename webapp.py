@@ -15,6 +15,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import answers
 import hunt
 from hunt import (APPLIED_FILE, DATA, DEFAULT_PROFILE, ROOT, apply_jobs, can_auto_apply, config_path,
                   latest_file, list_profiles, load_config, load_json, run_search, save_json)
@@ -106,7 +107,12 @@ class _TaskOutput(io.TextIOBase):
 # ---------------------------------------------------------------- data for the page
 
 def _job_dict(cfg: dict, j: Job, applied: dict) -> dict:
-    via = "Naukri (auto)" if can_auto_apply(cfg, j) else ("Company site" if j.external_apply else "Naukri + questions")
+    if j.external_apply:
+        via = "Company site"
+    elif j.has_questionnaire:
+        via = "Naukri (auto, answers questions)" if can_auto_apply(cfg, j) else "Naukri + questions"
+    else:
+        via = "Naukri (auto)"
     return {
         "job_id": j.job_id, "score": j.score, "title": j.title, "company": j.company, "rating": j.rating,
         "experience": j.experience, "salary": j.salary, "location": j.location, "posted": j.posted,
@@ -132,6 +138,7 @@ def get_state() -> dict:
                          "has_results": latest_file(cfg).exists(), "resume": _resume_status(cfg)})
     return {
         "app": APP_ID, "profiles": profiles, "has_login": credentials() is not None,
+        "pending_questions": len(answers.load()["pending"]),
         "job_types": [{"id": t, "label": JOB_TYPE_LABELS[t]} for t in JOB_TYPES],
         "work_modes": [{"id": m, "label": m.capitalize()} for m in WORK_MODES],
         "task": TASK.snapshot(),
@@ -158,7 +165,7 @@ def task_search(profile: str, include_seen: bool, limit: int | None):
 
 MANUAL_REASONS = {
     "external": "applies on the company's website",
-    "needs_manual": "needs answers to recruiter questions",
+    "needs_manual": "asked a question it couldn't answer; add the answer under 'Recruiter questions'",
     "failed": "couldn't be applied automatically",
 }
 MAX_TABS = 10
@@ -182,7 +189,7 @@ def task_apply(profile: str, job_ids: list[str]):
 
     results = []
     if auto[:cap]:
-        for j, status in apply_jobs(auto[:cap]):
+        for j, status in apply_jobs(auto[:cap], cfg):
             results.append({"title": j.title, "company": j.company, "url": j.url, "status": status})
             if status in MANUAL_REASONS:
                 manual.append(manual_item(j, status))
@@ -313,6 +320,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(TASK.snapshot())
             if url.path == "/api/jobs":
                 return self._json(get_jobs(query.get("profile", DEFAULT_PROFILE)))
+            if url.path == "/api/answers":
+                return self._json({**answers.load(), "fields": answers.PROFILE_FIELDS})
             if url.path.startswith("/output/"):
                 name = url.path.removeprefix("/output/")
                 path = hunt.OUTPUT / name
@@ -344,6 +353,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(detect_resume_skills(profile))
             if url.path == "/api/resume/sync":
                 return self._json(resume_suggestions(profile))
+            if url.path == "/api/answers":
+                data = answers.update(body.get("details"), body.get("saved"), body.get("remove"))
+                return self._json({**data, "fields": answers.PROFILE_FIELDS})
             if url.path == "/api/login-details":
                 return self._json(save_login(body))
             if url.path == "/api/search":

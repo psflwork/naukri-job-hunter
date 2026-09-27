@@ -175,7 +175,7 @@ max_results:
 apply:
   max_per_run: 10
   max_per_day: 15
-  skip_questionnaires: true
+  answer_questions: true
 
 # Email template for `./run.sh contacts` ("Draft email" links).
 # Placeholders: {title} {company} {job_url} {name} {experience_years}
