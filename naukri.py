@@ -385,6 +385,8 @@ class Naukri:
             last_question = question
         return "needs_manual"
 
+    APPLY_LABEL = re.compile(r"^\s*(quick|easy|1[- ]?click|one[- ]click)?\s*apply(\s+now)?\s*$", re.I)
+
     def apply(self, job: Job, answerer=None) -> str:
         """Returns one of: applied, already_applied, external, needs_manual, failed.
 
@@ -403,9 +405,11 @@ class Naukri:
         ).count():
             return "external"
 
-        btn = page.locator("#apply-button")
+        btn = page.locator("#apply-button, [class*='quick-apply'], [class*='quickApply']")
         if not btn.count():
-            btn = page.get_by_role("button", name=re.compile(r"^\s*apply\s*$", re.I))
+            btn = page.get_by_role("button", name=self.APPLY_LABEL)
+        if not btn.count():
+            btn = page.locator("a, div, span").filter(has_text=self.APPLY_LABEL)
         if not btn.count():
             return "failed"
 
