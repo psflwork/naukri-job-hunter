@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # One-command entry point: sets up everything on first run, then hunts jobs.
+# Not a developer? Double-click START-HERE-Mac.command (or START-HERE-Windows.bat) instead.
+#   ./run.sh menu         simple numbered menu for everything below
 #   ./run.sh              login + search + report + ask before applying
 #   ./run.sh side         same, using the side-gig profile (config.side.yaml)
 #   ./run.sh --apply      same, apply without asking (for cron/scheduled runs)
@@ -14,18 +16,32 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-PYTHON="${PYTHON:-python3}"
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
-  echo "Python 3.10+ is required: https://www.python.org/downloads/" >&2
-  exit 1
-fi
-if ! "$PYTHON" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then
-  echo "Python 3.10+ is required (found $("$PYTHON" --version 2>&1))." >&2
-  exit 1
-fi
+find_python() {
+  local c
+  for c in "${PYTHON:-}" python3.14 python3.13 python3.12 python3.11 python3.10 python3 \
+           /usr/local/bin/python3 /opt/homebrew/bin/python3; do
+    if [ -n "$c" ] && command -v "$c" >/dev/null 2>&1 &&
+       "$c" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
+      echo "$c"
+      return 0
+    fi
+  done
+  return 1
+}
 
 if [ ! -x .venv/bin/python ]; then
-  echo "Creating Python environment..."
+  if ! PYTHON="$(find_python)"; then
+    cat >&2 <<'EOF'
+
+Python 3.10 or newer is needed (it's free).
+  1. Download it from https://www.python.org/downloads/ (the big yellow button)
+  2. Open the downloaded file and install it
+  3. Start Naukri Job Hunter again
+EOF
+    [ "$(uname)" = "Darwin" ] && open "https://www.python.org/downloads/"
+    exit 1
+  fi
+  echo "Setting things up for the first time. This takes a few minutes..."
   "$PYTHON" -m venv .venv
 fi
 if ! cmp -s requirements.txt .venv/.installed-requirements; then
@@ -50,7 +66,7 @@ if [ ! -f config.yaml ] && [ "${1:-}" != "setup" ]; then
   .venv/bin/python hunt.py setup
 fi
 
-COMMANDS="run login search open apply pick contacts prefs resume"
+COMMANDS="run login search open apply pick contacts prefs resume menu"
 is_command() { [[ " $COMMANDS " == *" ${1:-} "* ]]; }
 
 case "${1:-}" in

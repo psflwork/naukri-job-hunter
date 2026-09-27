@@ -13,8 +13,94 @@ Cursor, Claude Desktop and other MCP clients).
   (recruiter emails, phones, company links, prefilled email drafts) to send your resume yourself
 - Auto-apply has a dry run, confirmation and daily caps
 - Your resume, login and results stay on your machine
+- No coding needed: double-click to start, then choose from a simple menu
 
-## Quick start
+## Not a developer? Start here
+
+No coding or typing commands needed. Takes about 10 minutes the first time.
+
+**1. Install two free programs** (skip any you already have)
+
+- **Google Chrome**: [google.com/chrome](https://www.google.com/chrome/)
+- **Python**: [python.org/downloads](https://www.python.org/downloads/) → click the big yellow
+  *Download Python* button and open the file.
+  - **Windows:** on the first installer screen, tick **"Add python.exe to PATH"**, then click
+    *Install Now*.
+  - **Mac:** click *Continue* through the installer.
+
+**2. Download this tool**
+
+On this page, click the green **Code** button → **Download ZIP**. Open the downloaded ZIP to
+unpack it, and move the `naukri-job-hunter-main` folder somewhere easy to find, such as Documents.
+
+**3. Start it**
+
+Open the folder and double-click:
+
+| Computer | Double-click |
+|---|---|
+| Windows | `START-HERE-Windows.bat` |
+| Mac | `START-HERE-Mac.command` |
+
+<details>
+<summary>Windows or Mac blocks the file?</summary>
+
+- **Windows** ("Windows protected your PC"): click **More info** → **Run anyway**.
+- **Mac** ("cannot be opened" / "could not verify"): click **Done**, open **System Settings →
+  Privacy & Security**, scroll down and click **Open Anyway** next to `START-HERE-Mac.command`.
+  You only need to do this once.
+- **Mac, still not opening?** Open the *Terminal* app, type `bash ` (with a space), drag
+  `START-HERE-Mac.command` into the Terminal window and press Enter.
+
+</details>
+
+**4. Answer a few questions** (first time only)
+
+A window opens and sets itself up; this takes a few minutes. Then it asks for:
+
+- **Your resume**: drag your resume PDF into the window and press Enter.
+- **Years of experience** and the **job titles** you want, for example *python developer, project manager*.
+- **Your Naukri email and password** (optional). They're saved only on your computer. When you type
+  the password, nothing appears on screen; that's normal.
+
+**5. Use the menu**
+
+```text
+  1) Find jobs for me
+  2) Find side gigs (part-time / freelance / contract)
+  3) Show my latest jobs and choose which to apply to
+  4) Get recruiter emails / phone numbers (send resume myself)
+  5) Change what I'm looking for (skills, location, job type...)
+  6) Use a new resume
+  7) Log in to Naukri again
+  8) Start setup again
+  q) Quit
+```
+
+Type a number and press Enter. When searching, a Chrome window opens by itself and moves through
+Naukri; **don't close it**. A search takes about 5-20 minutes, then a page opens with your best
+matches, each with a match score.
+
+Next time, just double-click the START-HERE file again and pick from the menu.
+
+<details>
+<summary>Common questions</summary>
+
+- **Is my password safe?** It's stored only on your computer (in a file called `.env`) and is used
+  only to log in to Naukri. It's never uploaded anywhere.
+- **Will it apply to jobs without asking?** No. It always shows the jobs first and applies only to
+  the ones you choose.
+- **Chrome asks me to log in / shows a captcha or OTP.** Complete it in that Chrome window; the tool
+  waits for you and remembers the login next time.
+- **"Python 3.10 or newer is needed".** Install Python as in step 1 (on Windows, with *Add python.exe
+  to PATH* ticked), then start again.
+- **It found no jobs.** Choose 5 in the menu and widen your search: more job titles, location
+  *any*, work mode *any*.
+- **Where are my results?** In the `output` folder inside the tool's folder.
+
+</details>
+
+## Quick start (developers)
 
 ```bash
 git clone https://github.com/psflwork/naukri-job-hunter.git
@@ -41,8 +127,9 @@ What next?
 
 After that, just run `./run.sh` (regular jobs) or `./run.sh side` (side gigs) whenever you want.
 
-**Requirements:** Python 3.10+ and [Google Chrome](https://www.google.com/chrome/). macOS and Linux
-work out of the box; on Windows use [WSL](https://learn.microsoft.com/windows/wsl/install) or Git Bash.
+**Requirements:** Python 3.10+ and [Google Chrome](https://www.google.com/chrome/). On macOS and
+Linux use `./run.sh`; on Windows use `START-HERE-Windows.bat` (it accepts the same commands, e.g.
+`START-HERE-Windows.bat search --profile side`). `./run.sh menu` opens the numbered menu.
 
 > Run it as `./run.sh` from the project folder (with the `./`). It uses its own Python in `.venv`,
 > so you never need to activate anything.
@@ -300,6 +387,7 @@ and job history (`data/`), and reports (`output/`).
 
 | Path | Contents |
 |---|---|
+| `START-HERE-Mac.command` / `START-HERE-Windows.bat` | Double-click launchers that open the menu |
 | `run.sh` | One-command entry point: environment, setup wizard, then `hunt.py` |
 | `hunt.py` | CLI, search pipeline, reports |
 | `setup_wizard.py` | First-run setup (configs, resume, experience, roles, login) |

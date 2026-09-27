@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Naukri remote job hunter.
 
+  ./run.sh menu                      # simple numbered menu (what the START-HERE launchers open)
   ./run.sh setup                     # first-run wizard (run.sh starts it automatically)
   ./run.sh                           # everything: login, search, report, offer to apply
   ./run.sh side                      # same, using the side-gig profile (config.side.yaml)
@@ -419,7 +420,7 @@ def cmd_run(cfg: dict, args) -> None:
     post_search_menu(cfg, args)
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("-p", "--profile", default=DEFAULT_PROFILE,
                         help="hunt profile: default (config.yaml) or e.g. side (config.side.yaml)")
@@ -463,8 +464,20 @@ def main() -> None:
     rs.add_argument("path", nargs="?", help="resume PDF (asks if omitted)")
     rs.add_argument("--keep-skills", action="store_true", help="don't replace skills with detected ones")
     sub.add_parser("setup", help="first-run wizard: resume, experience, roles, Naukri login")
-    args = p.parse_args(sys.argv[1:] or ["run"])
+    sub.add_parser("menu", help="simple numbered menu for every action (used by the START-HERE launchers)")
+    return p
 
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args(sys.argv[1:] or ["run"])
+    if args.cmd == "menu":
+        cmd_menu(parser)
+    else:
+        dispatch(args)
+
+
+def dispatch(args) -> None:
     if args.cmd == "setup":
         run_setup()
         return
@@ -517,6 +530,79 @@ def cmd_resume(args) -> None:
     print(f"Detected {len(detected)} skills: {', '.join(detected)}")
     print("Skills kept as before." if args.keep_skills or not detected else "Your skills were updated to these.")
     print("Fine-tune with: ./run.sh prefs")
+
+
+MENU = """
+============================================================
+  Naukri Job Hunter
+============================================================
+{status}
+  1) Find jobs for me
+  2) Find side gigs (part-time / freelance / contract)
+  3) Show my latest jobs and choose which to apply to
+  4) Get recruiter emails / phone numbers (send resume myself)
+  5) Change what I'm looking for (skills, location, job type...)
+  6) Use a new resume
+  7) Log in to Naukri again
+  8) Start setup again
+  q) Quit
+"""
+
+
+def _menu_status() -> str:
+    try:
+        cur = summary(load_config(DEFAULT_PROFILE))
+    except (SystemExit, Exception):
+        return ""
+    roles = ", ".join(cur["roles"][:3]) + (" ..." if len(cur["roles"]) > 3 else "")
+    return (f"  Resume : {cur['resume']}\n"
+            f"  Roles  : {roles}\n"
+            f"  Where  : {describe(cur['locations'], empty='anywhere')} | {describe(cur['work_modes'])}"
+            f" | {describe(cur['job_types'], JOB_TYPE_LABELS)}\n")
+
+
+def _which_hunt() -> str | None:
+    """Ask regular vs side gigs when a side profile exists; None = cancelled."""
+    if "side" not in list_profiles():
+        return DEFAULT_PROFILE
+    answer = _ask("  For which search?  1) Regular jobs   2) Side gigs   (Enter = 1): ")
+    return {"": DEFAULT_PROFILE, "1": DEFAULT_PROFILE, "2": "side"}.get(answer)
+
+
+def cmd_menu(parser: argparse.ArgumentParser) -> None:
+    while True:
+        print(MENU.format(status=_menu_status()))
+        choice = _ask("Type a number and press Enter: ").lower()
+        if choice in ("q", "quit", "exit"):
+            return
+        argv: list[str] | None = None
+        if choice == "1":
+            argv = ["run"]
+        elif choice == "2":
+            argv = ["run", "--profile", "side"] if "side" in list_profiles() else ["run"]
+        elif choice in ("3", "4", "5"):
+            profile = _which_hunt()
+            if profile:
+                argv = [{"3": "pick", "4": "contacts", "5": "prefs"}[choice], "--profile", profile]
+        elif choice == "6":
+            argv = ["resume"]
+        elif choice == "7":
+            argv = ["login"]
+        elif choice == "8":
+            argv = ["setup"]
+        if argv is None:
+            print("Please type one of the numbers shown, or q to quit.")
+            continue
+        try:
+            dispatch(parser.parse_args(argv))
+        except KeyboardInterrupt:
+            print("\nStopped.")
+        except SystemExit as e:
+            if e.code not in (None, 0):
+                print(f"\n{e.code}")
+        except Exception as e:
+            print(f"\nSomething went wrong: {e}\nTry again, or choose 7 to log in again if Naukri logged you out.")
+        _ask("\nPress Enter to go back to the menu...")
 
 
 if __name__ == "__main__":

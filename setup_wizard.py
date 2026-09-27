@@ -31,8 +31,10 @@ def _set_list(path: Path, key: str, items: list[str]) -> None:
 
 
 def _clean_path(raw: str) -> Path:
-    # Terminals quote or backslash-escape dragged-in paths.
-    raw = raw.strip().strip("'\"").replace("\\ ", " ")
+    # Terminals quote or backslash-escape dragged-in paths (backslashes are separators on Windows).
+    raw = raw.strip().strip("'\"")
+    if os.name != "nt":
+        raw = raw.replace("\\ ", " ")
     return Path(os.path.expanduser(raw)).resolve()
 
 
@@ -52,7 +54,7 @@ def _choose_resume() -> str:
         print(f"Found resume: {local[0].name}")
         return local[0].name
     while True:
-        raw = _ask("Path to your resume PDF (you can drag the file into this window)")
+        raw = _ask("Your resume PDF: drag the file into this window (or type its full path), then press Enter")
         path = _clean_path(raw)
         if path.suffix.lower() == ".pdf" and path.exists():
             return str(path)
@@ -74,7 +76,7 @@ def _detect_skills(resume: str) -> None:
     print(f"\nSkills found in your resume ({len(detected)}): {', '.join(detected)}")
     if _ask("Use these for matching jobs? [Y/n]", "y").lower() in ("y", "yes"):
         set_pref("", "skills", detected)
-        print("  Saved. Add or remove skills any time with: ./run.sh prefs")
+        print("  Saved. Add or remove skills any time from the menu (Change what I'm looking for).")
 
 
 def _write_env() -> None:
@@ -85,7 +87,7 @@ def _write_env() -> None:
     email = _ask("Naukri email")
     if not email:
         return
-    password = getpass.getpass("Naukri password (hidden): ")
+    password = getpass.getpass("Naukri password (nothing shows while you type; press Enter when done): ")
     old_umask = os.umask(0o077)
     try:
         ENV_FILE.write_text(
@@ -110,18 +112,16 @@ def run_setup() -> None:
     while not years.isdigit():
         years = _ask("Please enter a whole number of years", "8")
     for cfg in configs:
-        _set_scalar(cfg, "resume_path", f'"{resume}"')
+        _set_scalar(cfg, "resume_path", "'" + resume.replace("'", "''") + "'")
         _set_scalar(cfg, "experience_years", years)
     _detect_skills(resume)
 
-    roles = _ask("\nRoles to search for, comma-separated (Enter keeps the defaults in config.yaml)\n"
+    roles = _ask("\nJob titles to search for, separated by commas (just press Enter to keep the suggested ones)\n"
                  "  e.g. senior python developer, full stack developer, solution architect\n ")
     if roles:
         _set_list(ROOT / "config.yaml", "queries", [r.strip() for r in roles.split(",") if r.strip()])
 
     _write_env()
 
-    print("\nSetup done. Change resume, skills, roles, location, work mode or job type any time: ./run.sh prefs")
-    print("(titles, exclusions and scoring live in config.yaml / config.side.yaml)")
-    print("Next:  ./run.sh          regular remote jobs")
-    print("       ./run.sh side     part-time / freelance / contract gigs\n")
+    print("\nSetup done! You can change your resume, skills, location or job type any time from the menu.")
+    print("(Advanced: titles, exclusions and scoring live in config.yaml / config.side.yaml)\n")

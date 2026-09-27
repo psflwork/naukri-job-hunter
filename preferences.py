@@ -6,6 +6,7 @@ Stored in data/preferences.json:
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Callable
@@ -75,9 +76,17 @@ def apply_saved(cfg: dict, profile: str) -> dict:
     return apply_overrides(cfg, **data["common"], **data["profiles"].get(profile, {}))
 
 
+def clean_path(raw: str) -> Path:
+    """Path typed or dragged into a terminal: strips quotes and (Mac/Linux) backslash-escaped spaces."""
+    raw = raw.strip().strip("'\"")
+    if os.name != "nt":
+        raw = raw.replace("\\ ", " ")
+    return Path(raw).expanduser().resolve()
+
+
 def import_resume(path_text: str) -> Path:
     """Copy a resume PDF into resumes/ and return its new path."""
-    src = Path(path_text.strip().strip("'\"").replace("\\ ", " ")).expanduser().resolve()
+    src = clean_path(path_text)
     if src.suffix.lower() != ".pdf" or not src.exists():
         raise ValueError(f"Not a PDF file: {src}")
     RESUMES_DIR.mkdir(exist_ok=True)
