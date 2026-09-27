@@ -199,13 +199,14 @@ class Answerer:
         if re.search(r"\b(phone|mobile|contact number)\b", q):
             return p.get("phone") or None
 
-        is_years = re.search(r"\b(how many|years|yrs|year)\b", q) and re.search(r"\b(experience|exp|worked)\b", q)
-        if is_years:
-            if re.search(r"\b(total|overall|professional|relevant|industry)\b", q):
-                return years
+        is_experience = re.search(r"\b(experience|exp|worked)\b", q)
+        is_total = re.search(r"\b(total|overall)\b", q)
+        if is_experience and (is_total or re.search(r"\b(how many|years|yrs|year)\b", q)):
             by_skill = self._skill_years(q)
             if by_skill is not None:
                 return by_skill
+            if is_total:
+                return years
             # "How many years of experience do you have?" (no specific skill or role named)
             return None if re.search(r"\b(in|with|on|using|as)\s+[a-z]", q) else years
 

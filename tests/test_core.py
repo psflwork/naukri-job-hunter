@@ -158,6 +158,9 @@ def test_answers_experience(answerer):
     assert answerer.answer("How many years of experience do you have in Python?") == "12"
     assert answerer.answer("Years of experience in React?", ["0-2", "3-5", "6-8", "9+"]) == "6-8"
     assert answerer.answer("How many years of experience do you have in Golang?") is None
+    assert answerer.answer("What is your total years of work experience?") == "12"
+    assert answerer.answer("What is your overall experience?", ["0-5 years", "5-10 years", "10+ years"]) == "10+ years"
+    assert answerer.answer("How many years of relevant experience do you have in Golang?") is None
     assert answerer.answer("Do you have hands-on experience with AWS?", ["Yes", "No"]) == "Yes"
     assert answerer.answer("Are you comfortable working in rotational shifts?", ["Yes", "No"]) == "Yes"
 
