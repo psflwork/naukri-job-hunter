@@ -1,6 +1,7 @@
 # Secrets and personal data - never commit
 .env
 *.pdf
+resumes/
 /config.yaml
 /config.*.yaml
 data/

@@ -59,6 +59,24 @@ def _choose_resume() -> str:
         print(f"  Not a PDF file: {path}")
 
 
+def _detect_skills(resume: str) -> None:
+    from matcher import read_resume
+    from preferences import set_pref
+    from skills import detect_skills
+
+    try:
+        detected = detect_skills(read_resume(ROOT / resume))
+    except Exception as e:
+        print(f"  Couldn't read skills from the resume ({e}); keeping the skills in config.yaml")
+        return
+    if not detected:
+        return
+    print(f"\nSkills found in your resume ({len(detected)}): {', '.join(detected)}")
+    if _ask("Use these for matching jobs? [Y/n]", "y").lower() in ("y", "yes"):
+        set_pref("", "skills", detected)
+        print("  Saved. Add or remove skills any time with: ./run.sh prefs")
+
+
 def _write_env() -> None:
     if ENV_FILE.exists() and re.search(r"(?m)^NAUKRI_EMAIL=.+", ENV_FILE.read_text()):
         print("Naukri login already saved in .env")
@@ -94,6 +112,7 @@ def run_setup() -> None:
     for cfg in configs:
         _set_scalar(cfg, "resume_path", f'"{resume}"')
         _set_scalar(cfg, "experience_years", years)
+    _detect_skills(resume)
 
     roles = _ask("\nRoles to search for, comma-separated (Enter keeps the defaults in config.yaml)\n"
                  "  e.g. senior python developer, full stack developer, solution architect\n ")
@@ -102,6 +121,7 @@ def run_setup() -> None:
 
     _write_env()
 
-    print("\nSetup done. Fine-tune skills, titles and filters any time in config.yaml / config.side.yaml.")
+    print("\nSetup done. Change resume, skills, roles, location, work mode or job type any time: ./run.sh prefs")
+    print("(titles, exclusions and scoring live in config.yaml / config.side.yaml)")
     print("Next:  ./run.sh          regular remote jobs")
     print("       ./run.sh side     part-time / freelance / contract gigs\n")

@@ -4,6 +4,8 @@
 #   ./run.sh side         same, using the side-gig profile (config.side.yaml)
 #   ./run.sh --apply      same, apply without asking (for cron/scheduled runs)
 #   ./run.sh --no-apply   search and report only
+#   ./run.sh prefs        change resume, skills, roles, location, work mode, job type
+#   ./run.sh resume PDF   switch resume (skills are re-detected from it)
 #   ./run.sh pick         numbered list of matches; choose which to apply to
 #   ./run.sh contacts     emails / phones / links to send your resume manually
 #   ./run.sh side pick    any command for the side-gig profile
@@ -48,7 +50,7 @@ if [ ! -f config.yaml ] && [ "${1:-}" != "setup" ]; then
   .venv/bin/python hunt.py setup
 fi
 
-COMMANDS="run login search open apply pick contacts"
+COMMANDS="run login search open apply pick contacts prefs resume"
 is_command() { [[ " $COMMANDS " == *" ${1:-} "* ]]; }
 
 case "${1:-}" in

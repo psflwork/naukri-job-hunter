@@ -24,7 +24,8 @@ queries:
   - freelance ai engineer
 
 search:
-  remote_only: true
+  work_modes: [remote]     # remote, hybrid, office ([] = any)
+  locations: []            # cities, e.g. [Bengaluru, Pune] ([] = anywhere)
   experience_filter: null  # no Naukri experience filter; junior gigs are dropped below instead
   job_age_days: 30         # gigs are posted less often; look back further
   max_pages_per_query: 2   # 20 jobs per page; lower = faster, fewer Naukri requests
@@ -32,51 +33,20 @@ search:
   max_delay_seconds: 7
   headless: false
 
-# A job is kept only if it shows a gig signal:
-#   gig_keywords       - searched in title, tags and description
-#   gig_title_keywords - searched in the title only (too noisy in descriptions)
-#   gig_ignore_phrases - removed before searching (e.g. "contract testing")
-require_gig_keywords: true
-gig_keywords:
-  - part time
-  - part-time
-  - freelance
-  - freelancer
-  - freelancing
-  - contractual
-  - contract role
-  - contract position
-  - contract basis
-  - contract opportunity
-  - contract job
-  - contract engagement
-  - contract duration
-  - contract rate
-  - type contract
-  - month contract
-  - months contract
-  - month engagement
-  - months engagement
-  - contract to hire
-  - c2h
-  - hourly
-  - per hour
-  - weekends only
-  - flexible hours
-  - flexible timings
-  - few hours
-  - secondary income
-  - side income
-  - independent consultant
-  - moonlighting
-  - second job
-  - 2nd job
-  - project based
-  - project-based
-gig_title_keywords:
-  - contract
-  - weekend
-  - consultant
+# Job types to keep: full_time, part_time, freelance, contract ([] = any).
+# Change per run with --job-type, or save with ./run.sh prefs.
+job_types: [part_time, freelance, contract]
+
+# Job types are detected from phrases in the title/tags/description (built-in list in options.py).
+# Add your own phrases per type with job_type_keywords, e.g.
+#   job_type_keywords:
+#     freelance: [freelance, freelancer, per project]
+# Words that only count in the job title (too noisy in descriptions):
+job_type_title_keywords:
+  contract: contract
+  weekend: part_time
+  consultant: freelance
+# Phrases removed before detection (e.g. "contract testing" is not a contract job):
 gig_ignore_phrases:
   - contract testing
   - smart contract

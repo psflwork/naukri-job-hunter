@@ -82,6 +82,7 @@ class Job:
     score: int = 0
     matched_skills: list[str] = field(default_factory=list)
     gig_signals: list[str] = field(default_factory=list)
+    job_types: list[str] = field(default_factory=list)
 
     @classmethod
     def from_api(cls, d: dict, query: str) -> "Job":
@@ -119,13 +120,22 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
-def search_url(query: str, page_no: int, experience: int | None, remote_only: bool, job_age: int) -> str:
-    slug = f"{_slug(query)}-jobs" + (f"-{page_no}" if page_no > 1 else "")
+WORK_MODE_IDS = {"office": 0, "remote": 2, "hybrid": 3}
+
+
+def search_url(query: str, page_no: int, experience: int | None, work_modes: list[str], job_age: int,
+               location: str | None = None) -> str:
+    slug = f"{_slug(query)}-jobs"
+    if location:
+        slug += f"-in-{_slug(location)}"
+    if page_no > 1:
+        slug += f"-{page_no}"
     params = [f"k={quote(query)}", f"jobAge={job_age}"]
+    if location:
+        params.append(f"l={quote(location)}")
     if experience is not None:
         params.append(f"experience={experience}")
-    if remote_only:
-        params.append("wfhType=2")
+    params += [f"wfhType={WORK_MODE_IDS[m]}" for m in work_modes if m in WORK_MODE_IDS]
     return f"{BASE_URL}/{slug}?{'&'.join(params)}"
 
 
@@ -193,18 +203,20 @@ class Naukri:
             self.page.wait_for_timeout(1500)
         return False
 
-    def search(self, query: str, *, experience: int | None, remote_only: bool, job_age: int,
-               max_pages: int, delay: tuple[float, float]) -> list[Job]:
+    def search(self, query: str, *, experience: int | None, work_modes: list[str], job_age: int,
+               max_pages: int, delay: tuple[float, float], location: str | None = None) -> list[Job]:
         jobs: list[Job] = []
+        label = f"{query} @ {location}" if location else query
         for page_no in range(1, max_pages + 1):
-            payload = self._fetch_search_page(search_url(query, page_no, experience, remote_only, job_age))
+            url = search_url(query, page_no, experience, work_modes, job_age, location)
+            payload = self._fetch_search_page(url)
             if payload is None:
-                log(f"  [{query}] page {page_no}: no API response (blocked or layout changed)")
+                log(f"  [{label}] page {page_no}: no API response (blocked or layout changed)")
                 break
             batch = payload.get("jobDetails") or []
             jobs.extend(Job.from_api(d, query) for d in batch)
             total = payload.get("noOfJobs", 0)
-            log(f"  [{query}] page {page_no}: {len(batch)} jobs (total available: {total})")
+            log(f"  [{label}] page {page_no}: {len(batch)} jobs (total available: {total})")
             if len(batch) < PAGE_SIZE or page_no * PAGE_SIZE >= total:
                 break
             time.sleep(random.uniform(*delay))

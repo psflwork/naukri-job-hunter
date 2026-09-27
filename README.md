@@ -60,6 +60,36 @@ work out of the box; on Windows use [WSL](https://learn.microsoft.com/windows/ws
 ./run.sh setup           # re-run the setup wizard
 ```
 
+### Change resume, skills, location and job type
+
+```bash
+./run.sh prefs           # menu: resume, skills, roles, locations, work mode, job type, experience
+./run.sh side prefs      # same for the side-gig hunt
+./run.sh resume ~/Downloads/new_cv.pdf   # switch resume; skills are re-detected from it
+```
+
+Choices are saved in `data/preferences.json` and override the YAML config. Resume, skills and
+experience are shared by all hunts; roles, locations, work mode and job type are per hunt. Uploaded
+resumes are copied into `resumes/` (git-ignored).
+
+Skills can be replaced (`python, react, aws`), edited (`+kafka, -angular`) or re-detected from the
+resume (`detect`).
+
+For a single run without saving anything:
+
+```bash
+./run.sh --location "Bengaluru, Pune" --work-mode hybrid,remote
+./run.sh --job-type contract --roles "python developer, solution architect"
+./run.sh --skills "+kafka, -angular" --experience 10
+./run.sh search --resume ~/cv_architect.pdf --work-mode any
+```
+
+| Option | Values |
+|---|---|
+| `--work-mode` | `remote`, `hybrid`, `office` (comma-separated) or `any` |
+| `--job-type` | `full-time`, `part-time`, `freelance`, `contract`, `gig` (= all three non full-time) or `any` |
+| `--location` | cities, comma-separated, or `any` |
+
 ### Shortcuts
 
 Work on the latest search results; put `side` first for the gig hunt (`./run.sh side pick`).
@@ -108,8 +138,8 @@ flowchart LR
     Matcher --> State[(data/<br/>seen, applied,<br/>latest results,<br/>browser session)]
 ```
 
-1. **Search**: for each query in the config, a real Chrome window opens Naukri's search page with
-   the Remote, experience and posted-in-last-N-days filters. The script reads the JSON the page
+1. **Search**: for each role (and each location, if you set any), a real Chrome window opens
+   Naukri's search page with the work-mode, experience and posted-in-last-N-days filters. The script reads the JSON the page
    itself loads, so it doesn't depend on the page's HTML layout.
 2. **Filter**: drops excluded titles/companies, jobs already applied to, and jobs seen in earlier
    runs.
@@ -120,7 +150,7 @@ flowchart LR
    | Skills | 50 | `skills` from config found in the job, plus job tags found in your resume |
    | Title | 25 | `strong_titles` / `target_titles` in the job title |
    | Experience | 15 | your years inside the job's min-max range |
-   | Remote | 10 | location says Remote |
+   | Remote | 10 | job is remote (when remote is allowed) or in one of your locations |
 
 4. **Report**: jobs at or above `min_score` go to `output/jobs_<timestamp>.html` and `.csv`.
 5. **Apply (optional)**: clicks Naukri's own Apply button. Company-site jobs and jobs with recruiter
@@ -150,9 +180,10 @@ flowchart LR
     Sc --> R[side_jobs report<br/>with Gig signals column]
 ```
 
-- **Gig signal required**: phrases like *part-time, freelance, contractual, 6 months contract,
-  secondary income, hourly* in the job. A bare *contract/weekend/consultant* only counts in the title,
-  and noise such as *contract testing* or *smart contracts* is ignored.
+- **Job type required**: `job_types: [part_time, freelance, contract]` keeps only jobs with phrases
+  like *part-time, freelance, contractual, 6 months contract, secondary income, hourly*. A bare
+  *contract/weekend/consultant* only counts in the title, and noise such as *contract testing* or
+  *smart contracts* is ignored. Pick just one type with `./run.sh side --job-type freelance`.
 - **Filters**: drops non-tech titles (teacher, sales, accountant, ...), jobs with none of your
   skills, and junior gigs (experience range below 5 years).
 
@@ -209,7 +240,8 @@ sequenceDiagram
 | Tool | Purpose |
 |---|---|
 | `get_candidate_profile` | Resume text and preferences of a hunt profile |
-| `search_jobs` | Search, score and rank (`profile="side"` for gigs); writes the report |
+| `update_preferences` | Save resume, skills, roles, locations, work mode, job type, experience |
+| `search_jobs` | Search, score and rank (`profile="side"` for gigs, optional one-off overrides); writes the report |
 | `list_matches` | Filter a profile's latest results without re-searching |
 | `get_job_details` | Full description, key skills, role, industry, applicants, company |
 | `login_status` / `login` | Check or refresh the Naukri session |
@@ -229,15 +261,17 @@ in your resume, experience and roles. Edit them any time to tune results:
 | `queries` | Search keywords, each searched separately |
 | `experience_years` | Your experience; used for scoring |
 | `search.experience_filter` | Naukri experience filter (defaults to `experience_years`; `null` = none) |
-| `search.remote_only` / `job_age_days` / `max_pages_per_query` | Search filters and depth |
+| `search.work_modes` | `remote`, `hybrid`, `office` (`[]` = any) |
+| `search.locations` | Cities to search, e.g. `[Bengaluru, Pune]` (`[]` = anywhere) |
+| `search.job_age_days` / `max_pages_per_query` | Search filters and depth |
 | `search.min_delay_seconds` / `max_delay_seconds` | Random pause between page loads |
 | `strong_titles` / `target_titles` | Title words worth full / partial title points |
 | `exclude_title_keywords` / `exclude_companies` | Jobs to drop |
 | `skills` | Your core skills; drive the skill score |
 | `min_skill_matches` | Drop jobs matching fewer of your skills |
 | `skip_if_max_experience_below` | Drop junior jobs (experience range tops out below this) |
-| `gig_keywords` / `gig_title_keywords` / `gig_ignore_phrases` | Gig-signal detection (side hunt) |
-| `require_gig_keywords` | Keep only jobs with a gig signal |
+| `job_types` | Keep only `full_time`, `part_time`, `freelance`, `contract` jobs (`[]` = any) |
+| `job_type_keywords` / `job_type_title_keywords` / `gig_ignore_phrases` | Extra job-type detection phrases |
 | `weights` | Score weights: `skills`, `title`, `experience`, `remote`, `gig` |
 | `min_score` | Minimum score to appear in results |
 | `max_results` | Max jobs per run (best first); the rest aren't marked seen and show up later |
@@ -270,7 +304,10 @@ and job history (`data/`), and reports (`output/`).
 | `hunt.py` | CLI, search pipeline, reports |
 | `setup_wizard.py` | First-run setup (configs, resume, experience, roles, login) |
 | `naukri.py` | Browser automation: search, job details, login, apply |
-| `matcher.py` | Resume parsing, gig-signal detection and scoring |
+| `matcher.py` | Resume parsing, job-type detection and scoring |
+| `preferences.py` | Saved choices (`./run.sh prefs`, `./run.sh resume`) layered over the configs |
+| `skills.py` | Skill detection from the resume, skill-list editing |
+| `options.py` | Job types, work modes and their detection phrases |
 | `contacts.py` | Contact list: emails/phones from job posts, company links, email drafts |
 | `mcp_server.py` | MCP server for AI agents |
 | `examples/` | Config templates for the regular and side-gig hunts |

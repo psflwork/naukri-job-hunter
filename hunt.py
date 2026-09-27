@@ -11,6 +11,9 @@
   ./run.sh open --top 10             # open the top matches from the latest report in your browser
   ./run.sh apply --top 10            # dry run: show which jobs would be auto-applied
   ./run.sh apply --top 10 --confirm  # actually apply (Naukri-native apply only)
+  ./run.sh prefs                     # change resume, skills, roles, location, work mode, job type
+  ./run.sh resume ~/cv.pdf           # switch resume (skills are re-detected from it)
+  ./run.sh --location Pune --work-mode hybrid --job-type contract   # one-off choices for this run
   ./run.sh pick                      # numbered list of matches; choose which to apply to
   ./run.sh contacts                  # emails / phones / links to send your resume manually
   ./run.sh side pick                 # any command for the side-gig profile
@@ -30,9 +33,12 @@ from pathlib import Path
 
 import yaml
 
-from matcher import Matcher, find_resume, read_resume
+from matcher import Matcher, find_resume, read_resume, wanted_job_types, wanted_work_modes
 from naukri import Job, Naukri, credentials
+from options import GIG_TYPES, JOB_TYPE_LABELS, JOB_TYPE_QUERY_PREFIX, describe
+from preferences import apply_overrides, apply_saved, edit_preferences, summary, use_resume
 from setup_wizard import run_setup
+from skills import edit_list
 
 ROOT = Path(__file__).parent
 DATA = ROOT / "data"
@@ -64,7 +70,21 @@ def load_config(profile: str = DEFAULT_PROFILE) -> dict:
         raise SystemExit(f"Unknown profile '{profile}'. Available: {', '.join(list_profiles())}")
     cfg = yaml.safe_load(path.read_text())
     cfg["_profile"] = profile
-    return cfg
+    return apply_saved(cfg, profile)
+
+
+def build_queries(cfg: dict, queries: list[str]) -> list[str]:
+    """When hunting only gig job types, turn 'python developer' into 'freelance python developer' etc."""
+    job_types = wanted_job_types(cfg)
+    if not job_types or not set(job_types) <= set(GIG_TYPES):
+        return queries
+    gig_words = ("part time", "part-time", "freelance", "freelancing", "contract", "contractual")
+    result: list[str] = []
+    for q in queries:
+        variants = [q] if any(w in q.lower() for w in gig_words) else \
+            [f"{JOB_TYPE_QUERY_PREFIX[t]} {q}" for t in job_types]
+        result += [v for v in variants if v not in result]
+    return result
 
 
 def _state_file(cfg: dict, name: str) -> Path:
@@ -86,13 +106,13 @@ def cmd_login(cfg: dict, args) -> None:
 
 
 def run_search(cfg: dict, *, include_seen: bool = False, queries: list[str] | None = None,
-               remote_only: bool | None = None, job_age_days: int | None = None,
-               max_pages: int | None = None, min_score: int | None = None,
-               limit: int | None = None) -> dict:
+               job_age_days: int | None = None, max_pages: int | None = None,
+               min_score: int | None = None, limit: int | None = None) -> dict:
     s = cfg["search"]
     limit = limit or cfg.get("max_results")
-    queries = queries or cfg["queries"]
-    remote_only = s.get("remote_only", True) if remote_only is None else remote_only
+    queries = build_queries(cfg, queries or cfg["queries"])
+    work_modes = wanted_work_modes(cfg)
+    locations = s.get("locations") or [None]
     job_age_days = job_age_days or s.get("job_age_days", 7)
     max_pages = max_pages or s.get("max_pages_per_query", 3)
     min_score = cfg.get("min_score", 0) if min_score is None else min_score
@@ -103,16 +123,18 @@ def run_search(cfg: dict, *, include_seen: bool = False, queries: list[str] | No
     with Naukri(headless=s.get("headless", False)) as n:
         if credentials():
             n.ensure_logged_in()
-        for query in queries:
-            for job in n.search(
-                query,
-                experience=experience,
-                remote_only=remote_only,
-                job_age=job_age_days,
-                max_pages=max_pages,
-                delay=(s.get("min_delay_seconds", 3), s.get("max_delay_seconds", 7)),
-            ):
-                found.setdefault(job.job_id, job)
+        for location in locations:
+            for query in queries:
+                for job in n.search(
+                    query,
+                    experience=experience,
+                    work_modes=work_modes,
+                    job_age=job_age_days,
+                    max_pages=max_pages,
+                    delay=(s.get("min_delay_seconds", 3), s.get("max_delay_seconds", 7)),
+                    location=location,
+                ):
+                    found.setdefault(job.job_id, job)
 
     seen = set(load_json(seen_file(cfg), []))
     applied = load_json(APPLIED_FILE, {})
@@ -137,8 +159,21 @@ def run_search(cfg: dict, *, include_seen: bool = False, queries: list[str] | No
             "limit": limit, "csv": csv_path, "html": html_path}
 
 
+def print_search_plan(cfg: dict) -> None:
+    cur = summary(cfg)
+    queries = build_queries(cfg, cfg["queries"])
+    searches = len(queries) * max(1, len(cur["locations"]))
+    print(f"Profile   : {cfg.get('profile_name', cfg['_profile'])}")
+    print(f"Resume    : {cur['resume']}")
+    print(f"Roles     : {', '.join(queries)}")
+    print(f"Locations : {describe(cur['locations'])}   Work mode: {describe(cur['work_modes'])}   "
+          f"Job type: {describe(cur['job_types'], JOB_TYPE_LABELS)}")
+    print(f"Skills    : {len(cur['skills'])} ({', '.join(cur['skills'][:8])}{' ...' if len(cur['skills']) > 8 else ''})")
+    print(f"Searches  : {searches} (roles x locations)   Change with: ./run.sh prefs\n")
+
+
 def cmd_search(cfg: dict, args) -> None:
-    print(f"Profile: {cfg.get('profile_name', cfg['_profile'])}")
+    print_search_plan(cfg)
     r = run_search(cfg, include_seen=args.all, limit=args.limit)
     results = r["results"]
     shown = f", showing top {len(results)}" if len(results) < r["total_matches"] else ""
@@ -160,13 +195,17 @@ def write_reports(jobs: list[Job], cfg: dict) -> tuple[Path, Path]:
     heading = cfg.get("profile_name", "Remote matches")
     show_signals = any(j.gig_signals for j in jobs)
 
-    cols = ["score", "title", "company", "experience", "salary", "location", "posted", "rating",
+    def job_type_label(j: Job) -> str:
+        return describe(j.job_types, JOB_TYPE_LABELS, empty="Full-time")
+
+    cols = ["score", "title", "company", "job_type", "experience", "salary", "location", "posted", "rating",
             "external_apply", "has_questionnaire", "gig_signals", "matched_skills", "url"]
     with csv_path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
         for j in jobs:
             row = asdict(j)
+            row["job_type"] = job_type_label(j)
             row["matched_skills"] = ", ".join(j.matched_skills)
             row["gig_signals"] = ", ".join(j.gig_signals)
             w.writerow([row[c] for c in cols])
@@ -179,6 +218,7 @@ def write_reports(jobs: list[Job], cfg: dict) -> tuple[Path, Path]:
             f"<tr><td class='s'>{j.score}</td>"
             f"<td><a href='{html.escape(j.url)}' target='_blank'>{html.escape(j.title)}</a></td>"
             f"<td>{html.escape(j.company)}{' ★' + j.rating if j.rating else ''}</td>"
+            f"<td>{html.escape(job_type_label(j))}</td>"
             f"<td>{html.escape(j.experience)}</td><td>{html.escape(j.salary)}</td>"
             f"<td>{html.escape(j.location)}</td><td>{html.escape(j.posted)}</td>"
             f"<td>{apply_type}</td>{signals}<td class='k'>{html.escape(', '.join(j.matched_skills))}</td></tr>"
@@ -193,7 +233,7 @@ th{{background:#f6f6f6;position:sticky;top:0}} td.s{{font-weight:700}} td.k{{col
 td.g{{color:#0a7d35;font-size:12px;font-weight:600}}
 a{{color:#275df5;text-decoration:none}} a:hover{{text-decoration:underline}}
 </style></head><body><h2>{html.escape(heading)}: {len(jobs)} matches &mdash; {stamp}</h2><table>
-<tr><th>Score</th><th>Title</th><th>Company</th><th>Exp</th><th>Salary</th><th>Location</th>
+<tr><th>Score</th><th>Title</th><th>Company</th><th>Type</th><th>Exp</th><th>Salary</th><th>Location</th>
 <th>Posted</th><th>Apply</th>{signals_th}<th>Matched skills</th></tr>{''.join(rows)}</table></body></html>""")
     return csv_path, html_path
 
@@ -384,9 +424,19 @@ def main() -> None:
     common.add_argument("-p", "--profile", default=DEFAULT_PROFILE,
                         help="hunt profile: default (config.yaml) or e.g. side (config.side.yaml)")
 
+    choices = argparse.ArgumentParser(add_help=False)
+    g = choices.add_argument_group("one-off search choices (this run only; save them with: ./run.sh prefs)")
+    g.add_argument("--resume", help="resume PDF to use")
+    g.add_argument("--skills", help="'python, react' = replace | '+kafka, -angular' = add/remove")
+    g.add_argument("--roles", help="roles to search, comma-separated")
+    g.add_argument("--location", help="cities, comma-separated, or 'any'")
+    g.add_argument("--work-mode", help="remote, hybrid, office (comma-separated) or any")
+    g.add_argument("--job-type", help="full-time, part-time, freelance, contract, gig (comma-separated) or any")
+    g.add_argument("--experience", type=int, help="total years of experience")
+
     p = argparse.ArgumentParser(description="Naukri remote job hunter (default command: run)")
     sub = p.add_subparsers(dest="cmd")
-    rp = sub.add_parser("run", parents=[common], help="login + search + report + optional apply")
+    rp = sub.add_parser("run", parents=[common, choices], help="login + search + report + optional apply")
     rp.add_argument("--all", action="store_true", help="include jobs seen in previous runs")
     rp.add_argument("--limit", type=int, help="max jobs in the results (overrides max_results)")
     rp.add_argument("--no-open", action="store_true", help="don't open the HTML report")
@@ -394,7 +444,7 @@ def main() -> None:
     rp.add_argument("--apply", action="store_true", help="apply without asking (for scheduled runs)")
     rp.add_argument("--no-apply", action="store_true", help="search only, never apply")
     sub.add_parser("login", parents=[common])
-    sp = sub.add_parser("search", parents=[common])
+    sp = sub.add_parser("search", parents=[common, choices])
     sp.add_argument("--all", action="store_true", help="include jobs seen in previous runs")
     sp.add_argument("--limit", type=int, help="max jobs in the results (overrides max_results)")
     sp.add_argument("--no-open", action="store_true", help="don't open the HTML report")
@@ -408,6 +458,10 @@ def main() -> None:
     ct = sub.add_parser("contacts", parents=[common], help="emails/phones/links to send your resume manually")
     ct.add_argument("--top", type=int, default=25)
     ct.add_argument("--no-open", action="store_true", help="don't open the HTML contact list")
+    sub.add_parser("prefs", parents=[common], help="change resume, skills, roles, location, work mode, job type")
+    rs = sub.add_parser("resume", parents=[common], help="switch to a new resume PDF and detect skills from it")
+    rs.add_argument("path", nargs="?", help="resume PDF (asks if omitted)")
+    rs.add_argument("--keep-skills", action="store_true", help="don't replace skills with detected ones")
     sub.add_parser("setup", help="first-run wizard: resume, experience, roles, Naukri login")
     args = p.parse_args(sys.argv[1:] or ["run"])
 
@@ -416,10 +470,53 @@ def main() -> None:
         return
     if not config_path(DEFAULT_PROFILE).exists():
         raise SystemExit("No config.yaml yet. Run: ./run.sh setup")
+    if args.cmd == "resume":
+        cmd_resume(args)
+        return
     cfg = load_config(args.profile)
+    try:
+        apply_cli_choices(cfg, args)
+    except ValueError as e:
+        raise SystemExit(str(e))
     commands = {"run": cmd_run, "login": cmd_login, "search": cmd_search, "open": cmd_open, "apply": cmd_apply,
-                "pick": cmd_pick, "contacts": cmd_contacts}
+                "pick": cmd_pick, "contacts": cmd_contacts, "prefs": cmd_prefs}
     commands[args.cmd](cfg, args)
+
+
+def apply_cli_choices(cfg: dict, args) -> None:
+    def split(text: str | None) -> list[str] | None:
+        if text is None:
+            return None
+        return [] if text.strip().lower() == "any" else [x.strip() for x in text.split(",") if x.strip()]
+
+    resume = getattr(args, "resume", None)
+    skills = getattr(args, "skills", None)
+    apply_overrides(
+        cfg,
+        resume_path=str(Path(resume).expanduser().resolve()) if resume else None,
+        skills=edit_list(cfg.get("skills", []), skills) if skills is not None else None,
+        roles=split(getattr(args, "roles", None)),
+        locations=split(getattr(args, "location", None)),
+        work_modes=split(getattr(args, "work_mode", None)),
+        job_types=split(getattr(args, "job_type", None)),
+        experience_years=getattr(args, "experience", None),
+    )
+
+
+def cmd_prefs(cfg: dict, args) -> None:
+    edit_preferences(args.profile, load_config)
+
+
+def cmd_resume(args) -> None:
+    path = args.path or input("Resume PDF path (drag the file here): ").strip()
+    try:
+        dest, detected = use_resume(path, update_skills=not args.keep_skills)
+    except ValueError as e:
+        raise SystemExit(str(e))
+    print(f"Now using {dest.relative_to(ROOT)} for every hunt.")
+    print(f"Detected {len(detected)} skills: {', '.join(detected)}")
+    print("Skills kept as before." if args.keep_skills or not detected else "Your skills were updated to these.")
+    print("Fine-tune with: ./run.sh prefs")
 
 
 if __name__ == "__main__":

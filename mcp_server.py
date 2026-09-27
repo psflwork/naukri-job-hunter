@@ -11,6 +11,8 @@ from hunt import (APPLIED_FILE, DEFAULT_PROFILE, ROOT, latest_file, list_profile
                   record_applied, run_search)
 from matcher import find_resume, read_resume
 from naukri import Job, Naukri, credentials
+from preferences import apply_overrides, set_pref, summary, use_resume
+from skills import detect_skills, edit_list
 
 mcp = MCPServer(
     name="naukri-job-hunter",
@@ -19,6 +21,8 @@ mcp = MCPServer(
         "search_jobs -> get_job_details on promising jobs -> present a shortlist -> apply_to_job only "
         "after the user explicitly approves specific jobs. Hunt profiles: 'default' (regular full-time "
         "roles, config.yaml) and 'side' (remote part-time/freelance/contract gigs, config.side.yaml). "
+        "The user can change resume, skills, roles, locations, work mode and job type: use "
+        "update_preferences to save them, or pass one-off overrides to search_jobs. "
         "Every browser tool opens a visible Chrome window; Naukri blocks headless browsers."
     ),
 )
@@ -46,8 +50,8 @@ def _summary(j: Job) -> dict:
     return {
         "job_id": j.job_id, "score": j.score, "title": j.title, "company": j.company,
         "rating": j.rating, "experience": j.experience, "salary": j.salary, "location": j.location,
-        "posted": j.posted, "apply_type": _apply_type(j), "matched_skills": j.matched_skills,
-        "gig_signals": j.gig_signals, "url": j.url,
+        "posted": j.posted, "apply_type": _apply_type(j), "job_types": j.job_types,
+        "matched_skills": j.matched_skills, "gig_signals": j.gig_signals, "url": j.url,
     }
 
 
@@ -66,9 +70,11 @@ def _find_job(job_id: str) -> Job | None:
 
 @mcp.tool()
 async def get_candidate_profile(profile: str = DEFAULT_PROFILE) -> dict:
-    """Return the candidate's resume text and the search preferences of a hunt profile.
+    """Return the candidate's resume text and the effective search preferences of a hunt profile.
 
     profile: "default" (regular roles) or "side" (part-time/freelance/contract gigs).
+    preferences = resume, skills, roles, locations, work_modes, job_types, experience_years
+    (saved choices from update_preferences layered over the YAML config; empty list = any).
     """
     cfg = load_config(profile)
     path = find_resume(ROOT, cfg.get("resume_path"))
@@ -76,13 +82,10 @@ async def get_candidate_profile(profile: str = DEFAULT_PROFILE) -> dict:
         "profile": profile,
         "profile_name": cfg.get("profile_name", profile),
         "available_profiles": list_profiles(),
-        "gig_keywords": cfg.get("gig_keywords"),
+        "preferences": summary(cfg),
         "resume_file": path.name,
         "resume_text": read_resume(path),
-        "experience_years": cfg.get("experience_years"),
-        "queries": cfg.get("queries"),
         "target_titles": cfg.get("target_titles"),
-        "skills": cfg.get("skills"),
         "exclude_title_keywords": cfg.get("exclude_title_keywords"),
         "exclude_companies": cfg.get("exclude_companies"),
         "search": cfg.get("search"),
@@ -91,10 +94,61 @@ async def get_candidate_profile(profile: str = DEFAULT_PROFILE) -> dict:
 
 
 @mcp.tool()
+async def update_preferences(
+    profile: str = DEFAULT_PROFILE,
+    resume_path: str | None = None,
+    skills_from_resume: bool = False,
+    skills: list[str] | None = None,
+    add_skills: list[str] | None = None,
+    remove_skills: list[str] | None = None,
+    roles: list[str] | None = None,
+    locations: list[str] | None = None,
+    work_modes: list[str] | None = None,
+    job_types: list[str] | None = None,
+    experience_years: int | None = None,
+) -> dict:
+    """Save the user's search choices; every later search/run uses them. Omitted values stay unchanged.
+
+    resume_path: absolute path of a resume PDF; it is copied into resumes/ and becomes the active resume.
+    skills_from_resume: replace skills with the ones detected in the (new) resume.
+    skills: replace the skill list. add_skills / remove_skills: edit it instead.
+    roles: search keywords, e.g. ["python developer", "solution architect"].
+    locations: cities, e.g. ["Bengaluru", "Pune"]; [] = any location.
+    work_modes: any of "remote", "hybrid", "office"; [] = any.
+    job_types: any of "full_time", "part_time", "freelance", "contract" ("gig" = all three non full-time); [] = any.
+    Resume, skills and experience are shared by all profiles; the rest is per profile.
+    """
+    try:
+        if resume_path:
+            use_resume(resume_path, update_skills=skills_from_resume)
+        elif skills_from_resume:
+            cfg = load_config(profile)
+            set_pref(profile, "skills", detect_skills(read_resume(find_resume(ROOT, cfg.get("resume_path")))))
+        if skills is not None:
+            set_pref(profile, "skills", skills)
+        if add_skills or remove_skills:
+            edits = [f"+{s}" for s in add_skills or []] + [f"-{s}" for s in remove_skills or []]
+            set_pref(profile, "skills", edit_list(load_config(profile).get("skills", []), ", ".join(edits)))
+        overrides = {"roles": roles, "locations": locations, "work_modes": work_modes, "job_types": job_types}
+        for key, value in overrides.items():
+            if value is not None:
+                apply_overrides({}, **{key: value})
+                set_pref(profile, key, value)
+        if experience_years is not None:
+            set_pref(profile, "experience_years", experience_years)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
+    return {"profile": profile, "preferences": summary(load_config(profile))}
+
+
+@mcp.tool()
 async def search_jobs(
     profile: str = DEFAULT_PROFILE,
     queries: list[str] | None = None,
-    remote_only: bool = True,
+    locations: list[str] | None = None,
+    work_modes: list[str] | None = None,
+    job_types: list[str] | None = None,
+    skills: list[str] | None = None,
     job_age_days: int | None = None,
     max_pages: int | None = None,
     min_score: int | None = None,
@@ -104,22 +158,29 @@ async def search_jobs(
     """Search Naukri, score every job against the resume, and return the best matches.
 
     profile: "default" for regular roles, "side" for remote part-time/freelance/contract gigs.
-    queries: search keywords (defaults to the profile's queries).
+    queries, locations, work_modes, job_types, skills: one-off overrides of the saved preferences
+    (same values as update_preferences; [] = any). Omit to use the saved preferences.
     job_age_days: only jobs posted in the last N days (1, 3, 7, 15, 30).
     max_pages: result pages per query, 20 jobs each.
     include_seen: also return jobs already returned by earlier searches.
     Writes an HTML/CSV report and replaces the profile's "latest results" used by list_matches.
     """
     cfg = load_config(profile)
+    try:
+        apply_overrides(cfg, roles=queries, locations=locations, work_modes=work_modes,
+                        job_types=job_types, skills=skills)
+    except ValueError as e:
+        return {"error": str(e)}
 
     def run():
         with _browser_lock:
-            return run_search(cfg, include_seen=include_seen, queries=queries, remote_only=remote_only,
-                              job_age_days=job_age_days, max_pages=max_pages, min_score=min_score)
+            return run_search(cfg, include_seen=include_seen, job_age_days=job_age_days,
+                              max_pages=max_pages, min_score=min_score)
 
     r = await anyio.to_thread.run_sync(run)
     return {
         "profile": profile,
+        "searched_with": summary(cfg),
         "scanned_unique_jobs": r["scanned"],
         "matches": r["total_matches"],
         "returned_after_max_results": len(r["results"]),
